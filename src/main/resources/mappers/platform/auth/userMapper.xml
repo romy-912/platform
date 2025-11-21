@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.auth.mapper.UserMapper">
+
+    <select id="selectUserInfoByToken" resultType="com.romy.platform.main.auth.dvo.AuthUserDvo">
+        SELECT D1.USR_CD                                                           /* 사용자코드 */
+             , D1.USR_NM                                                           /* 사용자명 */
+             , D1.USR_ID                                                           /* 사번 */
+             , D1.USR_MAIL                                                         /* 메일주소 */
+             , D1.DEPT_CD                                                          /* 부서코드 */
+             , D2.DEPT_NM                                                          /* 부서명 */
+             , ISNULL(D2.SAP_DEPT_CD, D1.SAP_DEPT_CD)         AS SAP_DEPT_CD       /* SAP연동 ORGNZT_ID */
+             , ISNULL(D2.SAP_DEPT_NM, D1.SAP_DEPT_NM)         AS SAP_DEPT_NM       /* SAP연동 ORGNZT_NM */
+             , ISNULL(D2.SAP_MIS_DEPT_CD, D1.SAP_MIS_DEPT_CD) AS SAP_MIS_DEPT_CD   /* SAP연동 MIS_DEPT_CD */
+             , ISNULL(D2.SAP_MIS_DEPT_NM, D1.SAP_MIS_DEPT_NM) AS SAP_MIS_DEPT_NM   /* SAP연동 MIS_DEPT_NM */
+             , D1.SAP_SPOT_CD                                                      /* SAP연동 직위코드 */
+             , D1.SAP_SPOT_NM                                                      /* SAP연동 직위명 */
+             , ISNULL(D3.SAP_GROUP_CODE, 'XXXX')              AS SAP_GROUP_CD      /* SAP연동 부문코드 */
+             , CASE WHEN D4.USR_CD IS NOT NULL THEN 'Y'
+                    ELSE 'N'
+               END                                            AS ADMIN_YN          /* 관리자여부 */
+          FROM PLT_USR D1
+          LEFT OUTER JOIN PLT_DEPT D2
+            ON D2.DEPT_CD = D1.DEPT_CD
+           AND D2.DEL_YN  = 'N'
+           AND D2.USE_YN  = 'Y'
+          LEFT OUTER JOIN PLT_SAP_DEPT D3
+            ON D3.DEPT_CODE = ISNULL(D2.SAP_MIS_DEPT_CD, D1.SAP_MIS_DEPT_CD)
+          LEFT OUTER JOIN PLT_USR_ROLE D4
+            ON D4.USR_CD  = D1.USR_CD
+           AND D4.ROLE_CD = '00000000000000000000'
+         WHERE D1.DEL_YN    = 'N'
+           AND D1.RETIRE_YN = 'N'
+           AND D1.USR_ID    = #{usrId}
+    </select>
+
+</mapper>

@@ -1,0 +1,490 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.community.mapper.CommunityNoticeMapper">
+
+    <select id="selectNoticeExposureScopes" resultType="com.romy.platform.main.community.dto.CommunityNoticeDto$ScopeRes">
+        /* selectNoticeExposureScopes : 공지사항 공개범위 조회 */
+        <include refid="community.common.sql.withParentChildDept"/>
+             , CTS_DEPT AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , DEPT_NM
+                    , CONCAT(SAP_MIS_DEPT_CD, SAP_ORG_LEVEL_CD)                          AS SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN   = 'N'
+                  AND USE_YN   = 'Y'
+                  AND DEPT_CD IN ( SELECT DEPT_CD
+                                     FROM PLT_USR_CTS 
+                                    WHERE USR_CD = #{session.usrCd}
+                                      AND DEPT_CD <![CDATA[<>]]> #{session.deptCd} )
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , CONCAT(D1.SAP_MIS_DEPT_CD, D1.SAP_ORG_LEVEL_CD)                                    AS SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) + D2.ORD_STR AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT D1 
+                INNER JOIN CTS_DEPT D2
+                   ON D2.PARENT_DEPT_CD = D1.DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+             )
+        <if test="brdCd != null and brdCd != ''">
+             , BRD_DEPT AS
+             (
+               SELECT CASE WHEN D1.BRD_DIV_DETAIL_CD IS NOT NULL
+                            AND D1.DEPT_CD IS NULL THEN ( SELECT S2.DEPT_CD
+                                                            FROM PLT_CD S1 
+                                                           INNER JOIN PLT_DEPT S2 
+                                                              ON S2.SAP_DEPT_CD = S1.CD_CONT
+                                                             AND S2.DEL_YN      = 'N'
+                                                             AND S2.USE_YN      = 'Y'
+                                                           WHERE S1.DEL_YN    = 'N'
+                                                             AND S1.PARENT_CD = '00000000000000000010'
+                                                             AND S1.CD        = D1.BRD_DIV_DETAIL_CD )
+                           ELSE ISNULL(D1.DEPT_CD, '')
+                      END AS DEPT_CD               /* 부서코드(공개범위코드) */
+                 FROM PLT_BRD D1 
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.BRD_CD = #{brdCd}
+             )
+        </if>
+        SELECT DISTINCT DEPT_CD
+             , DEPT_NM
+             , 1 AS ORD
+             , SAP_ORG_LEVEL_CD
+             , ORD_STR
+          FROM DEPT_TREE
+         UNION ALL
+        SELECT DEPT_CD
+             , DEPT_NM
+             , 2
+             , SAP_ORG_LEVEL_CD
+             , ORD_STR
+          FROM CTS_DEPT
+    <if test="brdCd != null and brdCd != ''">
+         UNION ALL
+        SELECT D1.DEPT_CD
+             , D2.DEPT_NM
+             , 3
+             , CONCAT(D2.SAP_MIS_DEPT_CD, D2.SAP_ORG_LEVEL_CD)                        AS SAP_ORG_LEVEL_CD
+             , CONVERT(VARCHAR(1000), RIGHT('0000' + CAST(D2.ORD_NUM AS VARCHAR), 4)) AS ORD_STR
+          FROM BRD_DEPT D1
+         INNER JOIN PLT_DEPT D2 
+            ON D2.DEPT_CD = D1.DEPT_CD
+         WHERE D2.DEL_YN  = 'N'
+           AND NOT EXISTS ( SELECT 1
+                              FROM DEPT_TREE
+                             WHERE DEPT_CD = D1.DEPT_CD )
+           AND NOT EXISTS ( SELECT 1
+                              FROM CTS_DEPT
+                             WHERE DEPT_CD = D1.DEPT_CD )
+    </if>
+         ORDER BY ORD, SAP_ORG_LEVEL_CD, ORD_STR
+    </select>
+
+    <select id="selectSectorInfoByDeptCd" resultType="com.romy.platform.main.community.dvo.NoticeCondDvo">
+        /* selectSectorCdByDeptCd : 부서코드에 해당하는 부문코드 조회 */
+          WITH DEPT_GROUP AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , SAP_DEPT_CD
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = ISNULL(#{deptCd}, #{session.deptCd})
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.SAP_DEPT_CD
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_GROUP D2
+                   ON D2.PARENT_DEPT_CD = D1.DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+             )
+        SELECT C1.CD      AS SECTOR_CD
+             , D1.DEPT_CD AS SECTOR_DEPT_CD
+          FROM DEPT_GROUP D1
+         INNER JOIN PLT_CD C1 
+            ON C1.CD_CONT   = D1.SAP_DEPT_CD
+           AND C1.DEL_YN    = 'N'
+           AND C1.PARENT_CD = '00000000000000000010'
+    </select>
+
+    <select id="selectCommunityNotices" resultType="com.romy.platform.main.community.dto.CommunityNoticeDto$SearchRes">
+        /* selectCommunityNotices : 공지사항 조회 */
+          WITH MY_READ AS
+             (
+               SELECT BRD_CD
+                    , REG_USR_CD
+                    , MAX(REG_DTT) AS READ_DT
+                 FROM PLT_BRD_SCH_HISTORY 
+                WHERE REG_USR_CD = #{session.usrCd}
+                GROUP BY BRD_CD, REG_USR_CD
+             )
+        SELECT ISNULL(D1.NOTICE_TYPE, 'NTC')                AS NOTICE_TYPE      /* 유형코드 */
+             , C1.CD_NM                                     AS NOTICE_TYPE_NM   /* 유형명 */
+             , D1.BRD_CD                                                        /* 게시판코드 */
+             , D1.BRD_TIT                                                       /* 제목 */
+             , D1.REG_USR_NM                                                    /* 등록자 */
+             , D1.REG_USR_DEPT                                                  /* 등록자부서 */
+             , SUBSTRING(D1.MOD_DTT, 1, 8)                  AS MOD_DT           /* 등록일자 */
+             , D1.NOTICE_YN                                                     /* 상단공지여부 */
+             , D1.SCH_CNT                                                       /* 조회수 */
+             , ( SELECT COUNT(1)
+                   FROM PLT_FILE_ATT 
+                  WHERE DEL_YN            = 'N'
+                    AND FILE_FINAL_VER_YN = 'Y'
+                    AND FILE_REF_CD       = D1.BRD_CD
+                    AND FILE_GRP          = D1.BRD_MST_CD ) AS FILE_CNT         /* 파일건수 */
+             , ( SELECT STRING_AGG(FILE_NM, '||')
+                   FROM PLT_FILE_ATT 
+                  WHERE DEL_YN            = 'N'
+                    AND FILE_FINAL_VER_YN = 'Y'
+                    AND FILE_REF_CD       = D1.BRD_CD
+                    AND FILE_GRP          = D1.BRD_MST_CD ) AS FILE_NMS         /* 파일명 리스트 */
+             , NULL                                         AS FILE_NAMES
+             , CASE WHEN D1.REG_USR_CD = #{session.usrCd} THEN 'Y'
+                    WHEN D2.READ_DT IS NOT NULL THEN CASE WHEN CONVERT(FLOAT, D2.READ_DT) - CONVERT(FLOAT, D1.MOD_DTT) <![CDATA[<]]> 0
+                                                          THEN 'N'   /* 공지사항이 변경된 경우 */
+                                                          ELSE 'Y'
+                                                     END
+                    ELSE 'N'   /* 기존에는 5일이 경과한 경우 읽음처리함 */
+               END                                          AS READ_YN          /* 읽음여부 */
+             , CASE WHEN #{adminYn} = 'Y'
+                      OR D1.REG_USR_CD = #{session.usrCd} THEN 'Y'
+                    ELSE 'N'
+               END                                          AS EDIT_YN          /* 편집여부 */
+             , CASE WHEN D3.F_CD IS NOT NULL THEN 'Y'
+                    ELSE 'N'
+               END                                          AS FAVORITE_YN      /* 즐겨찾기여부 */
+             , D3.F_CD                                      AS FAVORITE_CD      /* 즐겨찾기코드 */
+          FROM PLT_BRD D1 
+          LEFT OUTER JOIN MY_READ D2
+            ON D2.BRD_CD = D1.BRD_CD
+          LEFT OUTER JOIN PLT_CD C1 
+            ON C1.CD        = ISNULL(D1.NOTICE_TYPE, 'NTC')
+           AND C1.DEL_YN    = 'N'
+           AND C1.PARENT_CD = 'NOTICE_TYPE'
+          LEFT OUTER JOIN PLT_FAVORITE D3 
+            ON D3.KEY_CD     = D1.BRD_CD
+           AND D3.DIV        = 'NOTICE'
+           AND D3.REG_USR_CD = #{session.usrCd}
+         WHERE D1.DEL_YN     = 'N'
+           AND D1.BRD_MST_CD = 'NOTICE'
+    <choose>
+      <when test=' "Y".equals(favoriteYn) '>
+           AND D3.F_CD IS NOT NULL
+      </when>
+      <otherwise>
+        <if test=' !"Y".equals(adminYn) '>
+           AND (    D1.BRD_DIV_DETAIL_CD IS NULL
+                 OR D1.BRD_DIV_DETAIL_CD = #{sectorCd}
+                 OR D1.BRD_DIV_DETAIL_CD IN ( SELECT DBO.FN_GET_DESIGN_SECTOR_CD(DEPT_CD) FROM PLT_USR_CTS WHERE USR_CD = #{session.usrCd} )
+               )
+           AND (    D1.DEPT_CD IS NULL
+                 OR D1.DEPT_CD = #{session.deptCd}
+                 OR EXISTS ( SELECT 1
+                               FROM DBO.fn_ChildDeptIds(D1.DEPT_CD)
+                              WHERE DEPT_CD = #{session.deptCd} )
+                 OR EXISTS ( SELECT 1
+                               FROM DBO.fn_ChildDeptIds(#{session.deptCd})
+                              WHERE DEPT_CD = D1.DEPT_CD )
+                 OR EXISTS ( SELECT 1
+                               FROM PLT_USR_CTS 
+                              WHERE DEPT_CD = D1.DEPT_CD
+                                AND USR_CD  = #{session.usrCd} )
+                 OR EXISTS ( SELECT 1
+                               FROM DBO.fn_ChildDeptIds(D1.DEPT_CD)
+                              WHERE DEPT_CD IN ( SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = #{session.usrCd} )
+                           )
+               )
+        </if>
+        <choose>
+          <when test='"TIT".equals(searchCond) and @com.romy.platform.common.utils.StringUtil@isNotEmpty(searchKeyword)'>
+           AND (
+                    D1.NOTICE_YN = 'Y'
+                 OR ( D1.NOTICE_YN = 'N' AND D1.BRD_TIT LIKE '%' + #{searchKeyword} + '%' )
+               )
+          </when>
+          <when test='"CONT".equals(searchCond) and @com.romy.platform.common.utils.StringUtil@isNotEmpty(searchKeyword)'>
+           AND (
+                    D1.NOTICE_YN = 'Y'
+                 OR ( D1.NOTICE_YN = 'N' AND D1.BRD_SCH_CONT LIKE '%' + #{searchKeyword} + '%' )
+               )
+          </when>
+          <when test='"REG".equals(searchCond) and @com.romy.platform.common.utils.StringUtil@isNotEmpty(searchKeyword)'>
+           AND (
+                    D1.NOTICE_YN = 'Y'
+                 OR ( D1.NOTICE_YN = 'N' AND D1.REG_USR_NM LIKE '%' + #{searchKeyword} + '%' )
+               )
+          </when>
+        </choose>
+        <if test="year != null and year != ''">
+           AND (
+                    D1.NOTICE_YN = 'Y'
+                 OR ( D1.NOTICE_YN = 'N' AND D1.MOD_DTT LIKE #{year} + '%' )
+               )
+        </if>
+      </otherwise>
+    </choose>
+         ORDER BY D1.NOTICE_YN DESC, D1.MOD_DTT DESC
+        OFFSET (#{startIdx} * #{listSize}) ROW
+         FETCH NEXT #{listSize} ROWS ONLY
+    </select>
+
+    <select id="selectNoticeDetail" resultType="com.romy.platform.main.community.dvo.NoticeDetailDvo">
+        /* selectNoticeDetail : 공지사항 상세정보 조회 */
+        SELECT D1.BRD_CD                                              /* 게시판코드 */
+             , D1.BRD_MST_CD                                          /* 게시판마스터코드 */
+             , ISNULL(D1.NOTICE_TYPE, 'NTC') AS NOTICE_TYPE           /* 공지유형코드 */
+             , C1.CD_NM                      AS NOTICE_TYPE_NM        /* 공지유형 */
+             , D1.BRD_TIT                                             /* 제목 */
+             , D1.BRD_CONT                                            /* 내용 */
+             , D1.BRD_SCH_CONT                                        /* 조회내용 */
+             , D1.SCH_CNT                                             /* 조회수 */
+             , D1.NOTICE_YN                                           /* 상단공지여부 */
+             , CASE WHEN D3.NOTICE_CD IS NOT NULL THEN 'Y'
+                    ELSE 'N'
+               END                           AS DEPT_OPER_NOTICE_YN   /* 부서운영현황 공지여부 */
+             , D1.MAIN_NOTICE_YN                                      /* 메인공지여부 */
+             , D1.NOTICE_POPUP_TOP_LOCATION                           /* 공지팝업 TOP위치 */
+             , D1.NOTICE_POPUP_LEFT_LOCATION                          /* 공지팝업 LEFT위치 */
+             , D1.NOTICE_POPUP_WIDTH_SIZE                             /* 공지팝업 가로사이즈 */
+             , D1.NOTICE_POPUP_HEIGHT_SIZE                            /* 공지팝업 세로사이즈 */
+             , D1.NOTICE_ST_DT                                        /* 팝업게시 시작일자 */
+             , D1.NOTICE_ED_DT                                        /* 팝업게시 종료일자 */
+             , SUBSTRING(D1.MOD_DTT, 1, 8)   AS MOD_DT                /* 등록일자 */
+             , D1.REG_USR_NM                                          /* 등록자 */
+             , D1.REG_USR_DEPT                                        /* 등록자부서 */
+             , D1.BRD_DIV_DETAIL_CD                                   /* 부문코드 */
+             , CASE WHEN D1.BRD_DIV_DETAIL_CD IS NOT NULL
+                     AND D1.DEPT_CD IS NULL THEN ( SELECT S2.DEPT_CD
+                                                     FROM PLT_CD S1 
+                                                    INNER JOIN PLT_DEPT S2 
+                                                       ON S2.SAP_DEPT_CD = S1.CD_CONT
+                                                      AND S2.DEL_YN      = 'N'
+                                                      AND S2.USE_YN      = 'Y'
+                                                    WHERE S1.DEL_YN    = 'N'
+                                                      AND S1.PARENT_CD = '00000000000000000010'
+                                                      AND S1.CD        = D1.BRD_DIV_DETAIL_CD )
+                    ELSE ISNULL(D1.DEPT_CD, '')
+               END                           AS DEPT_CD               /* 부서코드(공개범위코드) */
+             , CASE WHEN LEN(D1.DEPT_CD) <![CDATA[>]]> 0
+                    THEN ( SELECT DEPT_NM FROM PLT_DEPT  WHERE DEPT_CD = D1.DEPT_CD )
+                    WHEN LEN(D1.BRD_DIV_DETAIL_CD) <![CDATA[>]]> 0
+                    THEN ( SELECT CD_NM FROM PLT_CD  WHERE CD = D1.BRD_DIV_DETAIL_CD )
+                    ELSE '전체'
+               END                           AS EXPOSURE_SCOPE        /* 공개범위 */
+             , CASE WHEN D2.F_CD IS NOT NULL THEN 'Y'
+                    ELSE 'N'
+               END                           AS FAVORITE_YN           /* 즐겨찾기여부 */
+             , D2.F_CD                       AS FAVORITE_CD           /* 즐겨찾기코드 */
+          FROM PLT_BRD D1 
+          LEFT OUTER JOIN PLT_CD C1 
+            ON C1.CD        = ISNULL(D1.NOTICE_TYPE, 'NTC')
+           AND C1.DEL_YN    = 'N'
+           AND C1.PARENT_CD = 'NOTICE_TYPE'
+          LEFT OUTER JOIN PLT_FAVORITE D2 
+            ON D2.KEY_CD     = D1.BRD_CD
+           AND D2.DIV        = 'NOTICE'
+           AND D2.KEY_CD     = #{brdCd}
+           AND D2.REG_USR_CD = #{session.usrCd}
+          LEFT OUTER JOIN PLT_COOP_NOTICE D3 
+            ON D3.BRD_CD = D1.BRD_CD
+         WHERE D1.DEL_YN = 'N'
+           AND D1.BRD_CD = #{brdCd}
+    </select>
+
+    <delete id="deleteCommunityNotice">
+        /* deleteCommunityNotice : 공지사항 삭제 */
+        UPDATE PLT_BRD
+           SET DEL_YN = 'Y'
+         WHERE DEL_YN = 'N'
+           AND BRD_CD = #{brdCd}
+    </delete>
+
+    <insert id="mergeCommunityNotice">
+        /* mergeCommunityNotice : 공지사항 저장 */
+         MERGE INTO PLT_BRD TGT
+         USING ( SELECT #{brdCd} AS BRD_CD ) SRC
+            ON ( TGT.BRD_CD = SRC.BRD_CD )
+          WHEN MATCHED THEN
+        UPDATE
+           SET NOTICE_TYPE                = #{noticeType}
+             , BRD_DIV_DETAIL_CD          = #{brdDivDetailCd}
+             , DEPT_CD                    = #{deptCd}
+             , BRD_TIT                    = #{brdTit}
+             , BRD_CONT                   = #{brdCont}
+             , BRD_SCH_CONT               = #{brdSchCont}
+             , NOTICE_YN                  = #{noticeYn}
+             , MAIN_NOTICE_YN             = #{mainNoticeYn}
+             , NOTICE_POPUP_TOP_LOCATION  = #{noticePopupTopLocation}
+             , NOTICE_POPUP_LEFT_LOCATION = #{noticePopupLeftLocation}
+             , NOTICE_POPUP_WIDTH_SIZE    = #{noticePopupWidthSize}
+             , NOTICE_POPUP_HEIGHT_SIZE   = #{noticePopupHeightSize}
+             , NOTICE_ST_DT               = #{noticeStDt}
+             , NOTICE_ED_DT               = #{noticeEdDt}
+        <include refid="common.sql.updateSystemColumn" />
+          WHEN NOT MATCHED THEN
+        INSERT
+             (
+               BRD_CD                       /* 게시판코드 */
+             , BRD_MST_CD                   /* 게시판마스터코드 */
+             , NOTICE_TYPE                  /* 공지유형 */
+             , BRD_DIV_DETAIL_CD            /* 부문코드 */
+             , DEPT_CD                      /* 부서코드(공개범위코드) */
+             , BRD_TIT                      /* 제목 */
+             , BRD_CONT                     /* 내용 */
+             , BRD_SCH_CONT                 /* 검색내용 */
+             , SCH_CNT                      /* 조회수 */
+             , NOTICE_YN                    /* 상단공지여부 */
+             , MAIN_NOTICE_YN               /* 메인공지여부 */
+             , NOTICE_POPUP_TOP_LOCATION    /* 공지팝업 TOP위치 */
+             , NOTICE_POPUP_LEFT_LOCATION   /* 공지팝업 LEFT위치 */
+             , NOTICE_POPUP_WIDTH_SIZE      /* 공지팝업 가로사이즈 */
+             , NOTICE_POPUP_HEIGHT_SIZE     /* 공지팝업 세로사이즈 */
+             , NOTICE_ST_DT                 /* 팝업게시 시작일자 */
+             , NOTICE_ED_DT                 /* 팝업게시 종료일자 */
+             , DEL_YN                       /* 삭제여부 */
+             , OPEN_YN                      /* 공개여부 */
+             , ANSWER_YN                    /* 답변여부 */
+             , REG_USR_NM                   /* 등록자명 */
+             , REG_USR_SPOT                 /* 등록자직위 */
+             , REG_USR_DEPT                 /* 등록자부서 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+             (
+               #{brdCd}
+             , ISNULL(#{brdMstCd}, 'NOTICE')
+             , #{noticeType}
+             , #{brdDivDetailCd}
+             , #{deptCd}
+             , #{brdTit}
+             , #{brdCont}
+             , #{brdSchCont}
+             , #{schCnt}
+             , #{noticeYn}
+             , #{mainNoticeYn}
+             , #{noticePopupTopLocation}
+             , #{noticePopupLeftLocation}
+             , #{noticePopupWidthSize}
+             , #{noticePopupHeightSize}
+             , #{noticeStDt}
+             , #{noticeEdDt}
+             , #{delYn}
+             , #{openYn}
+             , #{answerYn}
+             , #{regUsrNm}
+             , #{regUsrSpot}
+             , #{regUsrDept}
+        <include refid="common.sql.insertSystemValue" />
+             ) ;
+    </insert>
+
+    <select id="selectNoticeRegUserYn" resultType="java.lang.String">
+        /* selectNoticeRegUserYn : 공지사항 등록자 확인 */
+        SELECT CASE WHEN REG_USR_CD = #{session.usrCd} THEN 'Y' ELSE 'N' END
+          FROM PLT_BRD 
+         WHERE DEL_YN = 'N'
+           AND BRD_CD = #{brdCd}
+    </select>
+
+    <update id="updateNoticeViewCount">
+        /* updateNoticeViewCount : 공지사항 조회수 업데이트 */
+        UPDATE PLT_BRD
+           SET SCH_CNT = ISNULL(SCH_CNT, 0) + 1
+         WHERE DEL_YN = 'N'
+           AND BRD_CD = #{brdCd}
+    </update>
+
+    <insert id="insertNoticeViewHistory">
+        /* insertNoticeViewHistory : 공지사항 조회 이력 생성 */
+        INSERT INTO PLT_BRD_SCH_HISTORY
+             (
+               BRD_CD         /* 게시판코드 */
+             , REG_USR_NM     /* 사용자명 */
+             , REG_USR_SPOT   /* 직위명 */
+             , REG_USR_DEPT   /* 부서명 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{brdCd}
+             , #{regUsrNm}
+             , #{regUsrSpot}
+             , #{regUsrDept}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <select id="selectNoticeReaders" resultType="com.romy.platform.main.community.dto.CommunityNoticeDto$ReaderRes">
+        /* selectNoticeReaders : 공지사항 열람자 조회 */
+        SELECT REG_USR_NM                 /* 성명 */
+             , REG_USR_SPOT               /* 직위 */
+             , REG_USR_DEPT               /* 부서 */
+             , CONVERT( VARCHAR(16)
+                      , CAST(CONVERT(DATE, SUBSTRING(REG_DTT, 1, 8)) AS DATETIME)
+                                         + CAST(CONVERT(TIME, SUBSTRING(REG_DTT, 9, 2) + ':' + SUBSTRING(REG_DTT, 11, 2)) AS DATETIME)
+                      , 120) AS SCH_DTT   /* 조회일시 */
+          FROM PLT_BRD_SCH_HISTORY 
+         WHERE BRD_CD = #{brdCd}
+         ORDER BY BRD_SCH_HISTORY_CD DESC
+    </select>
+
+    <select id="selectTrainingUsers" resultType="com.romy.platform.main.community.dto.CommunityNoticeDto$TrnUserRes">
+        /* selectTrainingUsers : 교육 대상자 조회 */
+        SELECT D1.BRD_CD        /* 게시판코드 */
+             , D1.USR_CD        /* 사용자코드 */
+             , D2.USR_NM        /* 성명 */
+             , D3.DEPT_NM       /* 부서명 */
+             , D2.SAP_SPOT_NM   /* 직위 */
+          FROM PLT_COMMU_TRN_USER D1 
+          LEFT OUTER JOIN PLT_USR D2 
+            ON D2.USR_CD = D1.USR_CD
+          LEFT OUTER JOIN PLT_DEPT D3 
+            ON D3.DEPT_CD = D2.DEPT_CD
+          LEFT OUTER JOIN DIDAS_SAP.dbo.TBL_SAP_ORG_INFO D4
+            ON D4.ORG_ID    = D3.SAP_DEPT_CD
+           AND D4.ORGNZT_ST = 'P'
+         WHERE D1.BRD_CD = #{brdCd}
+         ORDER BY ISNULL(CONVERT(VARCHAR(20), D4.ORG_SEQ), D2.DEPT_CD), D2.SAP_SPOT_CD, D2.USR_NM
+    </select>
+
+    <insert id="insertTrainingUsers">
+        /* insertTrainingUsers : 교육 대상자 생성 */
+        INSERT INTO PLT_COMMU_TRN_USER
+             (
+               BRD_CD
+             , USR_CD
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+             (
+               #{brdCd}
+             , #{item}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+        </foreach>
+    </insert>
+
+    <delete id="deleteTrainingUsers">
+        /* deleteTrainingUsers : 교육 대상자 삭제 */
+        DELETE
+          FROM PLT_COMMU_TRN_USER
+         WHERE BRD_CD = #{brdCd}
+           AND USR_CD IN
+                <foreach collection="list" item="item" open="(" close=")" separator=",">
+                          #{item}
+                </foreach>
+    </delete>
+
+</mapper>

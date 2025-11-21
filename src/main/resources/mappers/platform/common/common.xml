@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="common.sql">
+
+
+    <sql id="insertSystemField">
+             , REG_DTT      /* 등록일시 */
+             , REG_USR_CD   /* 등록사용자코드 */
+             , MOD_DTT      /* 수정일시 */
+             , MOD_USR_CD   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="insertSystemValue">
+             , ISNULL(#{session.regDtt}, #{regDtt})       /* 등록일시 */
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})   /* 등록사용자코드 */
+             , ISNULL(#{session.modDtt}, #{regDtt})       /* 수정일시 */
+             , ISNULL(#{session.modUsrCd}, #{regUsrCd})   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="updateSystemColumn">
+             , MOD_DTT    = ISNULL(#{session.modDtt}, #{modDtt})       /* 수정일시 */
+             , MOD_USR_CD = ISNULL(#{session.modUsrCd}, #{modUsrCd})   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="deleteSystemColumn">
+             , DEL_DTT    = #{session.delDtt}     /* 삭제일시 */
+             , DEL_USR_CD = #{session.delUsrCd}   /* 삭제사용자코드 */
+    </sql>
+
+    <sql id="insertSystemFieldByDate">
+             , REG_DT       /* 등록일자 */
+             , REG_USR_CD   /* 등록사용자코드 */
+             , MOD_DT       /* 수정일자 */
+             , MOD_USR_CD   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="insertSystemValueByDate">
+             , #{session.regDt}      /* 등록일자 */
+             , #{session.regUsrCd}   /* 등록사용자코드 */
+             , #{session.modDt}      /* 수정일자 */
+             , #{session.modUsrCd}   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="updateSystemColumnByDate">
+             , MOD_DT     = #{session.modDt}      /* 수정일자 */
+             , MOD_USR_CD = #{session.modUsrCd}   /* 수정사용자코드 */
+    </sql>
+
+    <sql id="insertSystemFieldByReg">
+             , REG_DTT      /* 등록일시 */
+             , REG_USR_CD   /* 등록사용자코드 */
+    </sql>
+
+    <sql id="insertSystemValueByReg">
+             , ISNULL(#{session.regDtt}, #{regDtt})       /* 등록일시 */
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})   /* 등록사용자코드 */
+    </sql>
+
+</mapper>

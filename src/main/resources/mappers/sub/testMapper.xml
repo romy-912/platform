@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.sub.test.mapper.TestMapper">
+
+
+    <insert id="insertTest">
+        /* insertTest : 트랜잭션 테스트 용 */
+        INSERT INTO SUB_COLLECTION_PLAN
+             (
+               PROJECT_CODE
+             , COLLECT_PLAN_DATE
+             , COLLECT_KIND
+             , COLLECT_PLAN_DOHWA_AMT
+             , COLLECT_PLAN_DOHWA_VAT
+             , COLL_SEQ
+             )
+        VALUES
+             (
+               '99-9999-999'
+             , CONVERT(DATETIME, '29991231', 112)
+             , '9'
+             , 0
+             , 0
+             , 72994
+             )
+    </insert>
+
+</mapper>

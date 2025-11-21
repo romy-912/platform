@@ -1,0 +1,62 @@
+server:
+  port: 9999
+  servlet:
+    context-path: /api
+
+domain: "http://127.0.0.1:3000/app"
+
+spring:
+  profiles:
+    default: local
+  application:
+    name: new-didas
+  cache:
+    type: redis
+  messages:
+    basename: messages
+    encoding: UTF-8
+    cache-duration: 60
+    use-code-as-default-message: true
+    multipart:
+      enabled: true
+      max-file-size: 2GB
+      max-request-size: 2GB
+
+romy:
+  datasource:
+    hikari:
+      connection-timeout: 10000
+      validation-timeout: 5000
+      idle-timeout: 600000
+      minimum-idle: 25
+      max-lifetime: 1500000
+      maximum-pool-size: 50
+      auto-commit: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health"
+  endpoint:
+    health:
+      show-details: never
+
+# file dir
+file:
+  maximum:
+    down:
+      size: 107374182400
+  server-root-file-dir: "/data-dev"
+  virtual-save-path: "/UploadDir/"
+  physical-save-path: "/data-dev/UploadDir/"
+  temp-excel-file:
+    path: "/data-dev/TempExcelFile/"
+
+sql:
+  maximum:
+    param: 180
+
+gw:
+  server:
+    url: "https://test.groupware.co.kr"

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.community.mapper.CommunityOfficialFormMapper">
+
+    <select id="selectOfficialFormCategory" resultType="com.romy.platform.main.community.dto.CommunityOfficialFormDto$CategoryRes">
+        /* selectOfficialFormCategory: 커뮤니티 행정양식 세부 카테고리 조회 */
+        SELECT OFFICIALFORM_CD        AS CTG_CD   /* 세부카테고리코드 */
+             , ISNULL(CD_CONT, CD_NM) AS CTG_NM   /* 세부카테고리명 */
+          FROM PLT_OFFICIALFORM_CD 
+         WHERE DEL_YN                 = 'N'
+           AND USE_YN                 = 'Y'
+           AND OFFICIALFORM_PARENT_CD IN ('OF_LV01_01', 'OF_LV01_03', 'OF_LV01_04')   /* 일반행정, 보고및회의, 기타 */
+         ORDER BY CTG_NM
+    </select>
+
+    <select id="selectOfficialForms" resultType="com.romy.platform.main.community.dto.CommunityOfficialFormDto$SearchRes">
+        /* selectOfficialForms : 행정양식 조회 */
+          WITH PARENT_CTG AS
+             (
+               SELECT OFFICIALFORM_CD        AS CTG_CD
+                    , ISNULL(CD_CONT, CD_NM) AS CTG_NM
+                    , ORD_NUM
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(255)) AS ORD_STR
+                 FROM PLT_OFFICIALFORM_CD 
+                WHERE DEL_YN                 = 'N'
+                  AND USE_YN                 = 'Y'
+                  AND OFFICIALFORM_PARENT_CD = #{ctgCd}
+             )
+             , OFFICIAL_CTG AS
+             (
+               SELECT ISNULL(D2.OFFICIALFORM_CD, D1.CTG_CD) AS CTG_CD
+                    , D1.CTG_NM                             AS PARENT_NM
+                    , ISNULL(D2.CD_CONT, D2.CD_NM)          AS CTG_NM
+                    , CASE WHEN D2.OFFICIALFORM_CD IS NULL
+                           THEN CAST(RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) AS VARCHAR(255))
+                           ELSE CAST(D1.ORD_STR + RIGHT('0000' + CAST(D2.ORD_NUM AS VARCHAR), 4) AS VARCHAR(255))
+                      END                                   AS ORD_STR
+                 FROM PARENT_CTG D1
+                 LEFT OUTER JOIN PLT_OFFICIALFORM_CD D2 
+                   ON D2.OFFICIALFORM_PARENT_CD = D1.CTG_CD
+                  AND D2.DEL_YN                 = 'N'
+                  AND D2.USE_YN                 = 'Y'
+             )
+        SELECT 'FILE'       AS DATA_TYPE   /* 데이터유형 */
+             , D2.FILE_ATT_CD              /* 파일첨부코드 */
+             , D2.FILE_NM                  /* 파일명 */
+             , D2.FILE_SIZE                /* 파일사이즈 */
+             , D2.FILE_EXT                 /* 파일확장자 */
+             , D2.FILE_GRP                 /* 파일그룹 */
+             , D2.MOD_DTT                  /* 수정일시 */
+             , D3.HELP_CONT                /* 가이드 */
+             , D1.PARENT_NM AS CTG_NM      /* 카테고리명 */
+          FROM OFFICIAL_CTG D1
+         INNER JOIN PLT_FILE_ATT D2 
+            ON D2.FILE_REF_CD = D1.CTG_CD
+          LEFT OUTER JOIN PLT_OFFICIALFORM_HELP D3 
+            ON D3.FILE_ATT_CD = D2.FILE_ATT_CD
+           AND D3.DEL_YN      = 'N'
+         WHERE D2.DEL_YN            = 'N'
+           AND D2.FILE_GRP          = 'OFFICIAL_FORM'
+           AND D2.FILE_FINAL_VER_YN = 'Y'
+         ORDER BY D1.ORD_STR
+    </select>
+
+</mapper>

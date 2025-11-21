@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.TrashMapper">
+
+    <insert id="insertTrashs">
+        /* insertTrashs : 휴지통 추가 */
+        INSERT INTO PLT_TRASH
+             (
+               TRASH_CD          /* 휴지통코드 */
+             , TARGET_CD         /* 파일/폴더코드 */
+             , TARGET_NM         /* 파일/폴더명 */
+             , TRASH_GRP         /* 휴지통그룹 */
+             , DIV               /* 파일/폴더/폴더위치 구분 */
+             , LOCATION          /* 위치구분 */
+             , LOCATION_DETAIL   /* 위치경로상세 */
+             , PARENT_CD         /* 부모폴더코드 */
+             , ROOT_YN           /* 최상위여부 */
+             , DEL_YN            /* 삭제여부 */
+             , RESTORE_YN        /* 복구여부 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+             (
+               #{item.trashCd}
+             , #{item.targetCd}
+             , #{item.targetNm}
+             , #{item.trashGrp}
+             , #{item.div}
+             , #{item.location}
+             , #{item.locationDetail}
+             , #{item.parentCd}
+             , #{item.rootYn}
+             , #{item.delYn}
+             , #{item.restoreYn}
+        <include refid="common.sql.insertSystemValue" />
+             )
+        </foreach>
+    </insert>
+
+
+</mapper>

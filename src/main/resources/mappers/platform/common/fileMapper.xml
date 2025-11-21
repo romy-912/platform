@@ -1,0 +1,930 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.FileMapper">
+
+    <select id="selectFilesByFileRefCd" resultType="com.romy.platform.main.common.dvo.FileDvo">
+        /* selectFilesByFileRefCd : 파일그룹, 파일참조코드에 해당하는 파일리스트 조회 */
+        SELECT FILE_ATT_CD        /* 파일첨부코드 */
+             , FILE_NM            /* 파일명 */
+             , FILE_EXT           /* 확장자 */
+             , FILE_SIZE          /* 파일사이즈 */
+             , FILE_REF_CD        /* 참조코드 */
+             , FILE_DL_CNT        /* 다운로드횟수 */
+             , DOC_ID             /* Synap ID */
+             , IS_LOCK            /* LOCK 여부 */
+             , OPEN_YN            /* 편집허용여부 */
+             , DOWNLOAD_YN        /* 다운로드여부 */
+             , FILE_SECURITY_YN   /* 보안여부 */
+             , MOD_DTT            /* 수정일시 */
+          FROM PLT_FILE_ATT 
+         WHERE DEL_YN            = 'N'
+        <if test=' "Y".equals(finalYn) '>
+           AND FILE_FINAL_VER_YN = #{finalYn}
+        </if>
+           AND FILE_GRP          = #{fileGrp}
+           AND FILE_REF_CD       = #{fileRefCd}
+         ORDER BY REG_DTT
+    </select>
+
+    <select id="selectFileInfo" resultType="com.romy.platform.main.common.dvo.FileDvo">
+        /* selectFileInfo : 파일정보 조회 */
+        SELECT D1.FILE_ATT_CD        /* 파일첨부코드 */
+             , D1.FILE_NM            /* 파일명 */
+             , D1.FILE_EXT           /* 확장자 */
+             , D1.FILE_SIZE          /* 파일사이즈 */
+             , D1.FILE_REF_CD        /* 참조코드 */
+             , D1.FILE_DL_CNT        /* 다운로드횟수 */
+             , D1.DOC_ID             /* Synap ID */
+             , D1.IS_LOCK            /* LOCK 여부 */
+             , D1.OPEN_YN            /* 편집허용여부 */
+             , D1.DOWNLOAD_YN        /* 다운로드여부 */
+             , D1.FILE_SECURITY_YN   /* 보안여부 */
+             , D1.FILE_VER_GRP_CD    /* 파일버전그룹코드 */
+             , D1.FILE_GRP           /* 파일그룹코드 */
+             , D1.PRJ_CD             /* 프로젝트코드 */
+             , D1.PROC_CD            /* 공정코드 */
+             , D1.FILE_LABEL         /* 파일 라벨 */
+             , CASE WHEN D2.PERMANENT = 'N' THEN 'N'
+                    ELSE 'Y'
+               END AS PERMANENT      /* 영구지정여부 */
+          FROM PLT_FILE_ATT D1 
+          LEFT OUTER JOIN PLT_FILE_PROP D2 
+            ON D2.FILE_ATT_CD = D1.FILE_ATT_CD
+         WHERE D1.FILE_ATT_CD = #{fileAttCd}
+    </select>
+
+    <delete id="deleteFilesByFileRefCd">
+        /* deleteFilesByFileRefCd : 파일그룹, 파일참조코드에 해당하는 파일 삭제 */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN = 'Y'
+        <include refid="common.sql.deleteSystemColumn"/>
+         WHERE DEL_YN      = 'N'
+           AND FILE_GRP    = #{fileGrp}
+           AND FILE_REF_CD = #{fileRefCd}
+           AND ISNULL(IS_LOCK, '') <![CDATA[<>]]> 'Y'
+           AND FILE_ATT_CD NOT IN ( SELECT D1.FILE_ATT_CD
+                                      FROM PLT_FILE_ATT_HWP_LOCK D1
+                                     INNER JOIN PLT_FILE_ATT D2
+                                        ON D2.FILE_ATT_CD = D1.FILE_ATT_CD
+                                     WHERE D2.FILE_GRP    = #{fileGrp}
+                                       AND D2.FILE_REF_CD = #{fileRefCd} )
+    </delete>
+
+    <insert id="insertFile">
+        /* insertFile : 파일 생성 */
+        INSERT INTO PLT_FILE_ATT
+             (
+               FILE_ATT_CD         /* 파일첨부코드 */
+             , FILE_NM             /* 파일명 */
+             , FILE_EXT            /* 확장자 */
+             , FILE_PHY_PATH       /* 물리경로 */
+             , FILE_SIZE           /* 사이즈 */
+             , FILE_REF_CD         /* 참조코드 */
+             , FILE_GRP            /* 파일그룹코드 */
+             , FILE_DL_CNT         /* 다운로드횟수 */
+             , FILE_FINAL_VER_YN   /* 최종버전여부 */
+             , PRJ_CD              /* 프로젝트코드 */
+             , PROC_CD             /* 공정코드 */
+             , DOC_ID              /* Synap ID */
+             , FILE_VER_GRP_CD     /* 파일버전그룹코드 */
+             , FILE_SECURITY_YN    /* 보안여부 */
+             , DEL_YN              /* 삭제여부 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+             (
+               #{fileAttCd}
+             , #{fileNm, jdbcType=NVARCHAR}
+             , #{fileExt}
+             , #{filePhyPath}
+             , #{fileSize}
+             , #{fileRefCd}
+             , #{fileGrp}
+             , #{fileDlCnt}
+             , #{fileFinalVerYn}
+             , #{prjCd}
+             , #{procCd}
+             , #{docId}
+             , #{fileVerGrpCd}
+             , ISNULL(#{fileSecurityYn}, 'N')
+             , #{delYn}
+        <include refid="common.sql.insertSystemValue" />
+             ) ;
+
+        DECLARE @PRE_PERM CHAR(1) = 'Y';
+        <if test='@com.romy.platform.common.utils.StringUtil@isNotEmpty(permanent)'>
+            SET @PRE_PERM = #{permanent} ;
+        </if>
+
+         MERGE INTO PLT_FILE_PROP TGT
+         USING ( SELECT #{fileAttCd} AS FILE_ATT_CD ) SRC
+            ON ( TGT.FILE_ATT_CD = SRC.FILE_ATT_CD )
+          WHEN MATCHED THEN
+        UPDATE
+           SET PERMANENT = @PRE_PERM
+          WHEN NOT MATCHED THEN
+        INSERT
+             (
+               FILE_ATT_CD   /* 파일첨부코드 */
+             , PERMANENT     /* 영구지정 */
+             , REG_USR_CD    /* 등록사용자코드 */
+             , MOD_USR_CD    /* 수정사용자코드 */
+             )
+        VALUES
+             (
+               #{fileAttCd}
+             , @PRE_PERM
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})
+             ) ;
+    </insert>
+
+    <update id="updateFileRefCd">
+        /* updateFileRefCd : 파일참조코드 업데이트 */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN      = 'N'
+             , DEL_DTT     = NULL
+             , DEL_USR_CD  = NULL
+             , FILE_REF_CD = #{fileRefCd}
+             , FILE_GRP    = #{fileGrp}
+             , PRJ_CD      = #{prjCd}
+             , PROC_CD     = #{procCd}
+        <include refid="common.sql.updateSystemColumn" />
+         WHERE FILE_ATT_CD = #{fileAttCd}
+    </update>
+
+    <delete id="deleteFile">
+        /* deleteFile : 파일삭제 */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN = 'Y'
+        <include refid="common.sql.deleteSystemColumn"/>
+         WHERE FILE_ATT_CD = #{fileAttCd}
+           AND ISNULL(IS_LOCK, '') <![CDATA[<>]]> 'Y'
+           AND FILE_ATT_CD NOT IN ( SELECT FILE_ATT_CD FROM PLT_FILE_ATT_HWP_LOCK WHERE FILE_ATT_CD = #{fileAttCd} )
+    </delete>
+
+    <select id="selectFileInfoForDownload" resultType="com.romy.platform.main.common.dvo.FileDownloadDvo">
+        /* selectFileInfoForDownload : 파일다운로드 정보 조회 */
+        SELECT FILE_NM              /* 파일명 */
+             , FILE_PHY_PATH        /* 물리경로 */
+             , CASE WHEN LEN(FILE_EXT) <![CDATA[>]]> 0 THEN CONCAT(FILE_ATT_CD, '.', FILE_EXT)
+                    ELSE FILE_ATT_CD
+               END AS FILE_PHY_NM   /* 물리파일명 */
+             , IS_LOCK              /* 잠금여부 */
+             , DOC_ID               /* Synap Doc Id */
+             , FILE_REF_CD          /* 파일참조코드 */
+             , FILE_GRP             /* 파일그룹 */
+             , PRJ_CD               /* 프로젝트코드 */
+             , PROC_CD              /* 공정코드 */
+          FROM PLT_FILE_ATT 
+         WHERE DEL_YN      = 'N'
+           AND FILE_ATT_CD = #{fileAttCd}
+    </select>
+
+    <insert id="insertFileDownloadHistory">
+        /* insertFileDownloadHistory : 파일 다운로드 이력 생성 */
+        INSERT INTO PLT_FILE_DL_HISTORY
+             (
+               FILE_ATT_CD    /* 파일참조코드 */
+             , FILE_SCH_DIV   /* 조회구분 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{fileAttCd}
+             , #{fileSchDiv}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <insert id="insertFileAttFwRequest">
+        /* insertFileAttFwRequest : 파일 요청이력 생성 */
+        INSERT INTO PLT_FILE_ATT_FW_REQUEST
+             (
+               FILE_ATT_CD   /* 파일첨부코드 */
+             , FW_REQUEST    /* 요청정보 */
+             , REG_USR_CD    /* 등록사용자코드 */
+             )
+        VALUES
+             (
+               #{fileAttCd}
+             , #{fwRequest}
+             , ISNULL(#{session.regUsrCd}, #{usrCd})
+             ) ;
+
+        <if test='"put".equals(fwRequest)'>
+        UPDATE PLT_FILE_ATT_WEB_LOCK
+           SET REG_DTT = GETDATE()
+         WHERE FILE_ATT_CD = #{fileAttCd} ;
+        </if>
+    </insert>
+
+    <update id="updateFileAttInfo">
+        /* updateFileAttInfo : 파일정보 업데이트 */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN            = 'N'
+             , DEL_DTT           = NULL
+             , DEL_USR_CD        = NULL
+        <if test="fileNm != null">
+             , FILE_NM           = #{fileNm, jdbcType=NVARCHAR}
+        </if>
+        <if test="fileExt != null">
+             , FILE_EXT          = #{fileExt}
+        </if>
+        <if test="fileRefCd != null">
+             , FILE_REF_CD       = #{fileRefCd}
+        </if>
+        <if test="fileGrp != null">
+             , FILE_GRP          = #{fileGrp}
+        </if>
+        <if test="fileDlCnt != null">
+             , FILE_DL_CNT       = #{fileDlCnt}
+        </if>
+        <if test="fileFinalVerYn != null">
+             , FILE_FINAL_VER_YN = #{fileFinalVerYn}
+        </if>
+        <if test="prjCd != null">
+             , PRJ_CD            = #{prjCd}
+        </if>
+        <if test="procCd != null">
+             , PROC_CD           = #{procCd}
+        </if>
+        <if test="fileLabel != null">
+            , FILE_LABEL         = #{fileLabel}
+        </if>
+        <if test="fileVerGrpCd != null">
+             , FILE_VER_GRP_CD   = #{fileVerGrpCd}
+        </if>
+        <if test="openYn != null">
+            , OPEN_YN            = #{openYn}
+        </if>
+        <if test="fileSecurityYn != null">
+            , FILE_SECURITY_YN   = #{fileSecurityYn}
+        </if>
+        <include refid="common.sql.updateSystemColumn" />
+         WHERE FILE_ATT_CD = #{fileAttCd}
+    </update>
+
+    <update id="updateFileAttOnlyField">
+        /* updateFileAttOnlyField : 파일정보 업데이트 (Audit 제외) */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN            = 'N'
+             , DEL_DTT           = NULL
+             , DEL_USR_CD        = NULL
+        <if test="fileNm != null">
+             , FILE_NM           = #{fileNm, jdbcType=NVARCHAR}
+        </if>
+        <if test="fileExt != null">
+             , FILE_EXT          = #{fileExt}
+        </if>
+        <if test="fileRefCd != null">
+             , FILE_REF_CD       = #{fileRefCd}
+        </if>
+        <if test="fileGrp != null">
+             , FILE_GRP          = #{fileGrp}
+        </if>
+        <if test="fileDlCnt != null">
+             , FILE_DL_CNT       = #{fileDlCnt}
+        </if>
+        <if test="fileFinalVerYn != null">
+             , FILE_FINAL_VER_YN = #{fileFinalVerYn}
+        </if>
+        <if test="prjCd != null">
+             , PRJ_CD            = #{prjCd}
+        </if>
+        <if test="procCd != null">
+             , PROC_CD           = #{procCd}
+        </if>
+        <if test="fileLabel != null">
+             , FILE_LABEL         = #{fileLabel}
+        </if>
+        <if test="fileVerGrpCd != null">
+             , FILE_VER_GRP_CD   = #{fileVerGrpCd}
+        </if>
+        <if test="openYn != null">
+             , OPEN_YN            = #{openYn}
+        </if>
+        <if test="fileSecurityYn != null">
+             , FILE_SECURITY_YN   = #{fileSecurityYn}
+        </if>
+         WHERE FILE_ATT_CD = #{fileAttCd}
+    </update>
+
+    <insert id="insertFileByCopy">
+        /* insertFileByCopy : 파일 복사에 따른 파일 생성 */
+        INSERT INTO PLT_FILE_ATT
+             (
+               FILE_ATT_CD         /* 파일첨부코드 */
+             , FILE_NM             /* 파일명 */
+             , FILE_EXT            /* 확장자 */
+             , FILE_PHY_PATH       /* 물리경로 */
+             , FILE_SIZE           /* 사이즈 */
+             , FILE_REF_CD         /* 참조코드 */
+             , FILE_GRP            /* 파일그룹코드 */
+             , FILE_DL_CNT         /* 다운로드횟수 */
+             , FILE_FINAL_VER_YN   /* 최종버전여부 */
+             , DEL_YN              /* 삭제여부 */
+             , PRJ_CD              /* 프로젝트코드 */
+             , PROC_CD             /* 공정코드 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        SELECT #{newFileAttCd}
+             , FILE_NM
+             , FILE_EXT
+             , #{newFilePhyPath}
+             , FILE_SIZE
+             , #{newFileRefCd}
+             , #{newFileGrp}
+             , 0
+             , 'Y'
+             , 'N'
+             , #{newPrjCd}
+             , #{newProcCd}
+        <include refid="common.sql.insertSystemValue" />
+          FROM PLT_FILE_ATT
+         WHERE FILE_ATT_CD = #{fileAttCd} ;
+
+        DECLARE @PRE_PERM CHAR(1) = 'Y';
+        <if test='@com.romy.platform.common.utils.StringUtil@isNotEmpty(permanent)'>
+            SET @PRE_PERM = #{permanent} ;
+        </if>
+
+         MERGE INTO PLT_FILE_PROP TGT
+         USING ( SELECT #{newFileAttCd} AS FILE_ATT_CD ) SRC
+            ON ( TGT.FILE_ATT_CD = SRC.FILE_ATT_CD )
+          WHEN MATCHED THEN
+        UPDATE
+           SET PERMANENT = @PRE_PERM
+          WHEN NOT MATCHED THEN
+        INSERT
+             (
+               FILE_ATT_CD   /* 파일첨부코드 */
+             , PERMANENT     /* 영구지정 */
+             , REG_USR_CD    /* 등록사용자코드 */
+             , MOD_USR_CD    /* 수정사용자코드 */
+             )
+        VALUES
+             (
+               #{newFileAttCd}
+             , @PRE_PERM
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})
+             , ISNULL(#{session.regUsrCd}, #{regUsrCd})
+        ) ;
+    </insert>
+
+    <insert id="insertFileAttFolderLoc">
+        /* insertFileAttFolderLoc : 프로젝트 폴더 위치 생성 */
+        INSERT INTO PLT_FILE_ATT_FOLDER_LOC
+             (
+               FILE_ATT_CD
+             , FOLDER_CD
+             , DEL_YN
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+             (
+               #{fileAttCd}
+             , #{folderCd}
+             , 'N'
+        <include refid="common.sql.insertSystemValue" />
+             )
+    </insert>
+
+    <select id="selectNoPermissionFiles" resultType="java.lang.String">
+        /* selectNoPermissionFiles : 권한 없는 파일 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+        <if test="folderCd != null and folderCd != ''">
+             , FOLDER_TREE AS
+             (
+               SELECT FOLDER_CD AS ROOT_FOLDER
+                    , FOLDER_CD AS CHILD_FOLDER
+                    , FOLDER_GRP
+                 FROM PLT_FOLDER 
+                WHERE DEL_YN     = 'N'
+                  AND FOLDER_GRP = #{fileGrp}
+                  AND FOLDER_CD  = #{folderCd}
+                UNION ALL
+               SELECT D1.ROOT_FOLDER
+                    , D2.FOLDER_CD
+                    , D2.FOLDER_GRP
+                 FROM FOLDER_TREE D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.CHILD_FOLDER
+                WHERE D2.DEL_YN = 'N'
+             )
+        </if>
+        SELECT D1.FILE_ATT_CD
+          FROM PLT_FILE_ATT D1 
+         INNER JOIN PLT_FOLDER D2 
+            ON D2.FOLDER_CD  = D1.FILE_REF_CD
+           AND D2.FOLDER_GRP = D1.FILE_GRP
+        <if test="folderCd != null and folderCd != ''">
+         INNER JOIN FOLDER_TREE D3
+            ON D3.CHILD_FOLDER = D1.FILE_REF_CD
+           AND D3.FOLDER_GRP   = D1.FILE_GRP
+        </if>
+         WHERE D1.DEL_YN            = 'N'
+           AND D1.FILE_FINAL_VER_YN = 'Y'
+           AND D2.DEL_YN            = 'N'
+           AND D1.FILE_GRP          = #{fileGrp}
+           AND NOT EXISTS ( <include refid="community.common.sql.selectUsrAuthRole" >
+                                <property name="groupColumn" value="D1.FILE_GRP"/>
+                            </include> )   /* 권한체크 */
+           AND NOT(     D1.FILE_GRP = 'DEPT'
+                    AND EXISTS ( <include refid="community.common.sql.selectUsrDeptAuthRole">
+                                    <property name="deptColumn" value="D2.SECTOR_CD"/>
+                                </include> )
+                  )  /* 부서권한체크 */
+    <choose>
+        <!-- 편집권한에 대한 체크 -->
+        <when test=' "Y".equals(writeYn) '>
+           AND (
+                    NOT( ISNULL(D1.FILE_SECURITY_YN, '') <![CDATA[<>]]> 'Y' OR D1.REG_USR_CD = #{session.usrCd} )
+                 OR (
+                         ( D1.FILE_GRP NOT IN ('DEPT', 'GROUP') AND ISNULL(D1.OPEN_YN, '') <![CDATA[<>]]> 'Y' )
+                      OR (
+                               D1.FILE_GRP IN ('DEPT', 'GROUP')
+                        <include refid="community.common.sql.whereFileNoPermissionCond">
+                            <property name="column" value="D1.FILE_ATT_CD"/>
+                            <property name="groupColumn" value="D1.FILE_GRP"/>
+                            <property name="deptColumn" value="D2.SECTOR_CD"/>
+                        </include>
+                         )
+                    )
+               )
+        </when>
+        <!-- 읽기 권한에 대한 체크 -->
+        <otherwise>
+           AND (
+                    (     D1.FILE_GRP NOT IN ('DEPT', 'GROUP')
+                      AND D1.FILE_SECURITY_YN = 'Y'
+                      AND D1.REG_USR_CD <![CDATA[<>]]> ISNULL(#{session.usrCd}, #{sectorCd})
+                    )
+                 OR (
+                          D1.FILE_GRP IN ('DEPT', 'GROUP')
+                <include refid="community.common.sql.whereNoPermissionCond">
+                    <property name="column" value="D1.FILE_ATT_CD"/>
+                </include>
+                    )
+               )
+        </otherwise>
+    </choose>
+        <if test=" refCds != null and refCds.size != 0 ">
+           /* 프로젝트 파일용 */
+           AND EXISTS ( SELECT 1
+                          FROM PLT_FILE_ATT_FOLDER_LOC 
+                         WHERE DEL_YN      = 'N'
+                           AND FILE_ATT_CD = D1.FILE_ATT_CD
+                           AND FOLDER_CD IN
+                                        <foreach collection="refCds" item="item" open="(" close=")" separator=",">
+                                             #{item}
+                                        </foreach> )
+        </if>
+        <if test=" fileCds != null and fileCds.size != 0 ">
+           AND D1.FILE_ATT_CD IN
+                            <foreach collection="fileCds" item="item" open="(" close=")" separator=",">
+                                  #{item}
+                            </foreach>
+        </if>
+    </select>
+
+    <select id="selectFileVersions" resultType="com.romy.platform.main.common.dvo.FileDvo">
+        /* selectFileVersions : 파일 버전 목록 조회 */
+        SELECT D2.FILE_ATT_CD         /* 파일첨부코드 */
+             , D2.FILE_NM             /* 파일명 */
+             , D2.FILE_EXT            /* 파일확장자 */
+             , D2.FILE_VER_GRP_CD     /* 파일버전그룹코드 */
+             , D2.FILE_PHY_PATH       /* 물리경로 */
+             , D2.FILE_SIZE           /* 파일사이즈 */
+             , D2.FILE_REF_CD         /* 파일참조코드 */
+             , D2.FILE_GRP            /* 파일그룹코드 */
+             , D2.FILE_DL_CNT         /* 파일다운로드횟수 */
+             , D2.FILE_FINAL_VER_YN   /* 최종버전여부 */
+             , D2.DEL_YN              /* 삭제여부 */
+             , D2.FILE_LABEL          /* 파일라벨 */
+             , CASE WHEN D3.PERMANENT = 'N' THEN 'N'
+                    ELSE 'Y'
+               END AS PERMANENT       /* 영구지정여부 */
+          FROM PLT_FILE_ATT D1 
+         INNER JOIN PLT_FILE_ATT D2 
+            ON D2.FILE_VER_GRP_CD = D1.FILE_VER_GRP_CD
+          LEFT OUTER JOIN PLT_FILE_PROP D3 
+            ON D3.FILE_ATT_CD = D2.FILE_ATT_CD
+         WHERE D1.FILE_ATT_CD = #{fileAttCd}
+           AND D2.FILE_REF_CD = #{fileRefCd}
+           AND D2.FILE_GRP    = #{fileGrp}
+         ORDER BY D2.FILE_ATT_CD DESC
+    </select>
+
+    <update id="deleteFilesOnlyStatus">
+        /* deleteFileOnlyStatus : 삭제 상태 업데이트 */
+        UPDATE PLT_FILE_ATT
+           SET DEL_YN = 'Y'
+         WHERE ISNULL(IS_LOCK, '') <![CDATA[<>]]> 'Y'
+           AND FILE_ATT_CD IN
+                    <foreach collection="list" item="item" open="(" close=")" separator=",">
+                               #{item}
+                    </foreach>
+    </update>
+
+    <select id="selectFolderFilesByFolderCd" resultType="com.romy.platform.main.common.dto.FileDto$SearchRes">
+        /* selectFolderFilesByFolderCd : 폴더 코드에 해당하는 파일/폴더 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+             , FOLDER AS
+             (
+               SELECT D1.FOLDER_CD
+                    , D1.PARENT_CD
+                    , D1.FOLDER_NM
+                    , D1.ORD_NUM
+                    , D1.FOLDER_GRP
+                    , D1.REG_DTT
+                    , D1.MOD_DTT
+                    , D1.REG_USR_CD
+                    , D1.MOD_USR_CD
+                    , D1.SECTOR_CD
+                 FROM PLT_FOLDER D1 
+                WHERE D1.DEL_YN     = 'N'
+                  AND D1.FOLDER_GRP = #{folderGrp}
+                  AND D1.FOLDER_CD  = #{folderCd}
+                  AND (
+                           D1.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                        OR (     D1.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                        <include refid="community.common.sql.wherePermissionCond">
+                            <property name="column" value="D1.FOLDER_CD"/>
+                            <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                            <property name="deptColumn" value="D1.SECTOR_CD"/>
+                        </include>
+                           )
+                      )
+            <if test="searchKeyword != null and searchKeyword != ''">
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.PARENT_CD
+                    , D2.FOLDER_NM
+                    , D2.ORD_NUM
+                    , D2.FOLDER_GRP
+                    , D2.REG_DTT
+                    , D2.MOD_DTT
+                    , D2.REG_USR_CD
+                    , D2.MOD_USR_CD
+                    , D2.SECTOR_CD
+                 FROM FOLDER D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN     = 'N'
+                  AND D2.FOLDER_GRP = #{folderGrp}
+                  AND (
+                           D2.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                        OR (     D2.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                        <include refid="community.common.sql.wherePermissionCond">
+                            <property name="column" value="D2.FOLDER_CD"/>
+                            <property name="groupColumn" value="D2.FOLDER_GRP"/>
+                            <property name="deptColumn" value="D2.SECTOR_CD"/>
+                        </include>
+                           )
+                      )
+            </if>
+             )
+             , FOLDER_TREE AS
+             (
+               SELECT FOLDER_CD AS ROOT_FOLDER
+                    , FOLDER_CD AS CHILD_FOLDER
+                    , FOLDER_GRP
+                 FROM PLT_FOLDER 
+                WHERE PARENT_CD = #{folderCd}
+                UNION ALL
+               SELECT D1.ROOT_FOLDER
+                    , D2.FOLDER_CD
+                    , D2.FOLDER_GRP
+                 FROM FOLDER_TREE D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.CHILD_FOLDER
+                WHERE D2.DEL_YN = 'N'
+                  AND D2.FOLDER_GRP = #{folderGrp}
+                  AND (
+                           D2.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                        OR (     D2.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                            <include refid="community.common.sql.wherePermissionCond">
+                                <property name="column" value="D2.FOLDER_CD"/>
+                                <property name="groupColumn" value="D2.FOLDER_GRP"/>
+                                <property name="deptColumn" value="D2.SECTOR_CD"/>
+                            </include>
+                           )
+                      )
+             )
+             , FILE_SUM AS
+             (
+               SELECT S2.ROOT_FOLDER    AS FOLDER_CD
+                    , SUM(S1.FILE_SIZE) AS TOTAL_SIZE
+                 FROM PLT_FILE_ATT S1 
+                INNER JOIN FOLDER_TREE S2
+                   ON S2.CHILD_FOLDER = S1.FILE_REF_CD
+                  AND S2.FOLDER_GRP   = S1.FILE_GRP
+                WHERE S1.DEL_YN            = 'N'
+                  AND S1.FILE_FINAL_VER_YN = 'Y'
+                  AND S1.FILE_GRP          = #{folderGrp}
+                GROUP BY S2.ROOT_FOLDER
+             )
+        SELECT 'Y'                                             AS FOLDER_YN     /* 폴더여부 */
+             , D5.FOLDER_NM                                    AS FILE_NM       /* 폴더명 */
+             , D5.FOLDER_CD                                    AS FILE_ATT_CD   /* 폴더코드 */
+             , NULL                                            AS FILE_EXT      /* 파일확장자 */
+             , ISNULL(D4.TOTAL_SIZE, 0)                        AS FILE_SIZE     /* 폴더사이즈 */
+             , D5.FOLDER_GRP                                   AS FILE_GRP      /* 폴더그룹 */
+             , D5.PARENT_CD                                    AS FILE_REF_CD   /* 참조코드 */
+             , ''                                              AS FILE_GRP_NM   /* 부서/그룹명 */
+             , NULL                                            AS FOLDER_PATH   /* 폴더경로 */
+             , NULL                                            AS LOCK_DIV      /* 잠금구분 */
+             , 'N'                                             AS SECURITY_YN   /* 보안여부 */
+             , D5.REG_DTT                                                       /* 등록일시 */
+             , D5.REG_USR_CD                                                    /* 등록자코드 */
+             , D2.USR_NM                                       AS REG_USR_NM    /* 등록자명 */
+             , D5.MOD_DTT                                                       /* 수정일시 */
+             , D5.MOD_USR_CD                                                    /* 수정자코드 */
+             , D3.USR_NM                                       AS MOD_USR_NM    /* 수정자명 */
+          FROM FOLDER D1
+         INNER JOIN PLT_FOLDER D5 
+            ON D5.PARENT_CD  = D1.FOLDER_CD
+         INNER JOIN PLT_USR D2 
+            ON D2.USR_CD = D5.REG_USR_CD
+         INNER JOIN PLT_USR D3 
+            ON D3.USR_CD = D5.MOD_USR_CD
+          LEFT OUTER JOIN FILE_SUM D4
+            ON D4.FOLDER_CD = D5.FOLDER_CD
+         WHERE D5.DEL_YN     = 'N'
+           AND D5.FOLDER_GRP = #{folderGrp}
+           AND (
+                    D5.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                 OR (     D5.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                <include refid="community.common.sql.wherePermissionCond">
+                    <property name="column" value="D5.FOLDER_CD"/>
+                    <property name="groupColumn" value="D5.FOLDER_GRP"/>
+                    <property name="deptColumn" value="D5.SECTOR_CD"/>
+                </include>
+                    )
+               )
+      <if test="searchKeyword != null and searchKeyword != ''">
+        <if test=' "FILE_NM".equals(searchCond) '>
+           AND D5.FOLDER_NM LIKE '%' + #{searchKeyword} + '%'
+        </if>
+        <if test=' "USR_NM".equals(searchCond) '>
+           AND D2.USR_NM LIKE '%' + #{searchKeyword} + '%'
+        </if>
+      </if>
+         UNION ALL
+        SELECT 'N'           AS FOLDER_YN
+             , D1.FILE_NM
+             , D1.FILE_ATT_CD
+             , D1.FILE_EXT
+             , D1.FILE_SIZE
+             , D1.FILE_GRP
+             , D1.FILE_REF_CD
+             , CASE WHEN D1.FILE_GRP = 'DEPT'  THEN D7.DEPT_NM
+                    WHEN D1.FILE_GRP = 'GROUP' THEN D8.GROUP_NM
+               END                 AS FILE_GRP_NM
+             , dbo.fn_get_task_folder_depth_fullname(D6.FOLDER_CD) AS FOLDER_PATH
+             , CASE WHEN D4.FILE_ATT_CD IS NOT NULL THEN 'A'
+                    WHEN D1.IS_LOCK = 'Y'           THEN 'W'
+               END                 AS LOCK_DIV
+             , D1.FILE_SECURITY_YN AS SECURITY_YN
+             , D1.REG_DTT
+             , D1.REG_USR_CD
+             , D2.USR_NM           AS REG_USR_NM
+             , D1.MOD_DTT
+             , D1.MOD_USR_CD
+             , D3.USR_NM           AS MOD_USR_NM
+          FROM PLT_FILE_ATT D1 
+         INNER JOIN PLT_USR D2 
+            ON D2.USR_CD = D1.REG_USR_CD
+         INNER JOIN PLT_USR D3 
+            ON D3.USR_CD = D1.MOD_USR_CD
+          LEFT OUTER JOIN PLT_FILE_ATT_HWP_LOCK D4 
+            ON D4.FILE_ATT_CD = D1.FILE_ATT_CD
+        <if test="searchKeyword != null and searchKeyword != ''">
+         INNER JOIN FOLDER D5
+            ON D5.FOLDER_CD = D1.FILE_REF_CD
+        </if>
+         INNER JOIN PLT_FOLDER D6 
+            ON D6.FOLDER_CD  = D1.FILE_REF_CD
+          LEFT OUTER JOIN PLT_DEPT D7 
+            ON D7.DEPT_CD = D6.SECTOR_CD
+           AND D7.DEL_YN  = 'N'
+          LEFT OUTER JOIN PLT_COMMU_GROUP D8 
+            ON D8.GROUP_CD = D6.SECTOR_CD
+           AND D8.DEL_YN   = 'N'
+         WHERE D1.DEL_YN            = 'N'
+           AND D1.FILE_FINAL_VER_YN = 'Y'
+           AND D6.DEL_YN            = 'N'
+           AND (
+                    (
+                          D1.FILE_GRP NOT IN ('DEPT', 'GROUP')
+                      AND ISNULL(D1.FILE_SECURITY_YN, '') <![CDATA[<>]]> 'Y'
+                    )
+                 OR D1.REG_USR_CD = #{session.usrCd}
+                 OR (
+                         D1.FILE_GRP IN ('DEPT', 'GROUP')
+                <include refid="community.common.sql.wherePermissionCond">
+                    <property name="column" value="D1.FILE_ATT_CD"/>
+                    <property name="groupColumn" value="D1.FILE_GRP"/>
+                    <property name="deptColumn" value="D6.SECTOR_CD"/>
+                </include>
+                    )
+               )
+           AND D1.FILE_GRP    = #{folderGrp}
+        <if test="searchKeyword == null or searchKeyword == '' ">
+           AND D1.FILE_REF_CD = #{folderCd}
+        </if>
+        <if test="searchKeyword != null and searchKeyword != ''">
+          <if test=' "FILE_NM".equals(searchCond) '>
+           AND D1.FILE_NM LIKE '%' + #{searchKeyword} + '%'
+          </if>
+          <if test=' "USR_NM".equals(searchCond) '>
+           AND D2.USR_NM LIKE '%' + #{searchKeyword} + '%'
+          </if>
+        </if>
+         ORDER BY FOLDER_YN DESC, FILE_NM, FILE_ATT_CD DESC
+    </select>
+
+    <select id="selectFileProperties" resultType="com.romy.platform.main.common.dvo.FilePropDvo">
+        /* selectFileProperties : 파일 속성 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd" />
+        SELECT D1.FILE_ATT_CD                                                       /* 파일첨부코드 */
+             , D1.FILE_NM                                                           /* 파일명 */
+             , D1.FILE_GRP                                                          /* 파일그룹 */
+             , D1.FILE_EXT                                                          /* 파일확장자 */
+             , D2.FOLDER_CD                                                         /* 폴더코드 */
+             , D2.SECTOR_CD                                                         /* 부문/사용자코드 */
+             , dbo.fn_get_task_folder_depth_fullname(D2.FOLDER_CD) AS FOLDER_PATH   /* 폴더경로 */
+             , D1.FILE_SIZE                                                         /* 파일사이즈 */
+             , D1.REG_DTT                                                           /* 등록일시 */
+             , D1.MOD_DTT                                                           /* 수정일시 */
+             , D3.USR_NM                                           AS REG_USR_NM    /* 등록자명 */
+             , CASE WHEN D1.FILE_SECURITY_YN = 'Y' THEN 'Y'
+                    ELSE 'N'
+               END                                                 AS READONLY_YN   /* 읽기전용 */
+             , CASE WHEN D1.OPEN_YN = 'Y' THEN 'N'
+                    ELSE 'Y'
+               END                                                 AS SECURITY_YN   /* 보안여부 */
+             , CASE WHEN D1.REG_USR_CD = #{session.usrCd}     THEN 'Y'
+                    WHEN ( SELECT TOP 1 USR_CD
+                             FROM PLT_USR_ROLE 
+                            WHERE USR_CD   = #{session.usrCd}
+                              AND (
+                                       ROLE_CD = '00000000000000000000'
+                                    OR ( D1.FILE_GRP <![CDATA[<>]]> 'GROUP' AND ROLE_CD = 'ROLE_PROJECT_TF' )
+                                  )
+                         ) IS NOT NULL                        THEN 'Y'
+                    WHEN D1.FILE_GRP = 'DEPT'
+                     AND D2.SECTOR_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                     AND ( SELECT TOP 1 USR_CD
+                             FROM PLT_USR_ROLE
+                            WHERE USR_CD   = #{session.usrCd}
+                              AND ROLE_CD IN ('00000000000000000002', '00000000000000209753')
+                         ) IS NOT NULL                        THEN 'Y'
+                    WHEN D1.FILE_GRP NOT IN ('DEPT', 'GROUP') THEN CASE WHEN ISNULL(D1.FILE_SECURITY_YN, '') <![CDATA[<>]]> 'Y' THEN 'Y'
+                                                                        ELSE 'N'
+                                                                   END
+                    WHEN D1.FILE_GRP IN ('DEPT', 'GROUP')     THEN CASE WHEN D1.FILE_SECURITY_YN = 'Y' THEN 'N'
+                                                                        ELSE (
+                                                                                <include refid="community.common.sql.selectPermissionYn">
+                                                                                    <property name="column" value="D1.FILE_ATT_CD"/>
+                                                                                    <property name="groupColumn" value="D1.FILE_GRP"/>
+                                                                                    <property name="deptColumn" value="D2.SECTOR_CD"/>
+                                                                                </include>
+                                                                             )
+                                                                   END
+                    ELSE 'N'
+               END                                                 AS EDIT_YN       /* 파일편집권한 */
+          FROM PLT_FILE_ATT D1 
+         INNER JOIN PLT_FOLDER D2 
+            ON D2.FOLDER_CD  = D1.FILE_REF_CD
+         INNER JOIN PLT_USR D3 
+            ON D3.USR_CD = D1.REG_USR_CD
+           AND D3.DEL_YN = 'N'
+         WHERE D1.DEL_YN      = 'N'
+           AND D2.DEL_YN      = 'N'
+           AND D1.FILE_ATT_CD = #{fileAttCd}
+    </select>
+
+    <select id="selectFilesForGwMail" resultType="com.romy.platform.main.common.dvo.GroupwareMailFileDvo">
+        /* selectFilesForGwMail : 파일 조회 (그룹웨어 발송용) */
+        SELECT FILE_ATT_CD
+             , #{session.usrCd} AS USR_CD
+             , FILE_NM
+             , FILE_SIZE
+          FROM PLT_FILE_ATT 
+         WHERE DEL_YN            = 'N'
+           AND FILE_FINAL_VER_YN = 'Y'
+           AND FILE_ATT_CD IN
+                        <foreach collection="list" item="item" open="(" close=")" separator=",">
+                               #{item}
+                        </foreach>
+    </select>
+
+    <select id="selectFileVersionsForMng" resultType="com.romy.platform.main.common.dto.FileDto$VersionRes">
+        /* selectFileVersionsForMng : 파일버전 리스트 조회 (버전관리용) */
+          WITH FILE_INFO AS
+             (
+               SELECT D1.FILE_ATT_CD
+                    , D1.FILE_NM
+                    , D1.FILE_EXT
+                    , D1.FILE_GRP
+                    , D1.FILE_REF_CD
+                    , D1.FILE_LABEL
+                    , D1.FILE_VER_GRP_CD
+                    , D1.MOD_DTT
+                    , D1.REG_USR_CD
+                    , D2.USR_NM AS REG_USR_NM
+                 FROM PLT_FILE_ATT D1 
+                 LEFT OUTER JOIN PLT_USR D2 
+                   ON D2.USR_CD = D1.REG_USR_CD
+                WHERE D1.FILE_ATT_CD = #{fileAttCd}
+             )
+             , VERSIONS AS
+             (
+               SELECT D2.FILE_ATT_CD
+                    , D2.FILE_NM
+                    , D2.FILE_EXT
+                    , D2.FILE_GRP
+                    , D2.FILE_REF_CD
+                    , D2.FILE_LABEL
+                    , D2.FILE_VER_GRP_CD
+                    , D2.MOD_DTT
+                    , D2.REG_USR_CD
+                    , D3.USR_NM AS REG_USR_NM
+                 FROM FILE_INFO D1
+                INNER JOIN PLT_FILE_ATT D2 
+                   ON D2.FILE_VER_GRP_CD = D1.FILE_VER_GRP_CD
+                  AND D2.FILE_REF_CD     = D1.FILE_REF_CD
+                  AND D2.FILE_GRP        = D1.FILE_GRP
+                 LEFT OUTER JOIN PLT_USR D3 
+                   ON D3.USR_CD = D2.REG_USR_CD
+                WHERE D2.DEL_YN = 'N'
+                  AND LEN(D1.FILE_VER_GRP_CD) <![CDATA[>]]> 0
+             )
+        SELECT FILE_ATT_CD       /* 파일첨부코드 */
+             , FILE_NM           /* 파일명 */
+             , FILE_EXT          /* 파일확장자 */
+             , FILE_GRP          /* 파일그룹코드 */
+             , FILE_REF_CD       /* 파일참조코드 */
+             , FILE_VER_GRP_CD   /* 파일버전그룹코드 */
+             , FILE_LABEL        /* 파일 라벨/메모 */
+             , MOD_DTT           /* 수정일시 */
+             , REG_USR_CD        /* 등록자코드 */
+             , REG_USR_NM        /* 등록자명 */
+          FROM VERSIONS
+         WHERE EXISTS ( SELECT 1 FROM VERSIONS )
+         UNION ALL
+        SELECT FILE_ATT_CD
+             , FILE_NM
+             , FILE_EXT
+             , FILE_GRP
+             , FILE_REF_CD
+             , FILE_VER_GRP_CD
+             , FILE_LABEL
+             , MOD_DTT
+             , REG_USR_CD
+             , REG_USR_NM
+          FROM FILE_INFO
+         WHERE NOT EXISTS ( SELECT 1 FROM VERSIONS )
+         ORDER BY FILE_ATT_CD DESC
+    </select>
+
+    <select id="selectFilePermanent" resultType="java.lang.String">
+        /* selectFilePermanent : 파일 영구지정 조회 */
+        SELECT PERMANENT
+          FROM PLT_FILE_PROP 
+         WHERE FILE_ATT_CD = #{fileAttCd}
+    </select>
+
+    <select id="selectFileInfoForAgent" resultType="com.romy.platform.main.common.dto.FileDto$FileInfoRes">
+        /* selectFileInfoForAgent : 파일정보 조회 */
+        SELECT D1.FILE_ATT_CD       /* 파일첨부코드 */
+             , D1.FILE_NM           /* 파일명 */
+             , D1.FILE_EXT          /* 파일확장자 */
+             , D1.FILE_SIZE         /* 파일사이즈 */
+             , D1.FILE_GRP          /* 파일그룹코드 */
+             , D1.FILE_REF_CD       /* 파일참조코드 */
+             , CASE WHEN D1.FILE_GRP = 'DEPT'  THEN D3.DEPT_NM
+                    WHEN D1.FILE_GRP = 'GROUP' THEN D4.GROUP_NM
+               END AS FILE_GRP_NM   /* 파일그룹명 */
+          FROM PLT_FILE_ATT D1 
+          LEFT OUTER JOIN PLT_FOLDER D2 
+            ON D2.FOLDER_CD = D1.FILE_REF_CD
+           AND D2.DEL_YN    = 'N'
+          LEFT OUTER JOIN PLT_DEPT D3 
+            ON D3.DEPT_CD = D2.SECTOR_CD
+           AND D3.DEL_YN  = 'N'
+          LEFT OUTER JOIN PLT_COMMU_GROUP D4 
+            ON D4.GROUP_CD = D2.SECTOR_CD
+           AND D4.DEL_YN   = 'N'
+         WHERE D1.DEL_YN      = 'N'
+           AND D1.FILE_ATT_CD = #{fileAttCd}
+    </select>
+
+    <select id="selectFolderPathByFile" resultType="java.lang.String">
+        /* selectFolderPathByFile : 폴더 경로 조회 */
+        SELECT dbo.fn_get_task_folder_depth_fullname(#{fileRefCd})
+    </select>
+
+</mapper>

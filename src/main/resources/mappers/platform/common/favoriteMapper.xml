@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.FavoriteMapper">
+
+    <insert id="insertFavorite">
+        /* insertFavorite : 즐겨찾기 등록 */
+        INSERT INTO PLT_FAVORITE
+             (
+               F_CD     /* 즐겨찾기코드 */
+             , DIV      /* 구분 */
+             , KEY_CD   /* 참조키코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{fCd}
+             , #{div}
+             , #{keyCd}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <delete id="deleteFavorite">
+        /* deleteFavorite : 즐겨찾기 삭제 */
+        DELETE
+          FROM PLT_FAVORITE
+         WHERE F_CD = #{fCd}
+    </delete>
+
+
+</mapper>

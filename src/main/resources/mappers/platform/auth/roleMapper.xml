@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.auth.mapper.RoleMapper">
+
+    <select id="selectPermittedMenu" resultType="com.romy.platform.main.auth.dvo.AccessHisDvo">
+        /* selectPermittedMenu : 접속 메뉴 조회 */
+        SELECT D4.MENU_CD                                         /* 메뉴코드 */
+             , D4.PROGRAM_CD                                      /* 프로그램코드 */
+             , dbo.fn_get_menu_path(D4.MENU_CD) AS ACCESS_MENU    /* 메뉴경로 */
+             , D4.PROGRAM_NM                    AS REQ_PROGRAM    /* 프로그램명 */
+             , D1.USR_ID                        AS REG_USR_ID     /* 사번 */
+             , D1.USR_NM                        AS REG_USR_NM     /* 사용자명 */
+             , D1.SAP_SPOT_NM                   AS REG_USR_SPOT   /* 직위 */
+             , D4.PROGRAM_URL                                     /* 프로그램경로 */
+          FROM PLT_USR D1
+         INNER JOIN PLT_USR_ROLE D2
+            ON D2.USR_CD = D1.USR_CD
+         INNER JOIN PLT_ROLE_PROGRAM D3
+            ON D3.ROLE_CD = D2.ROLE_CD
+         INNER JOIN PLT_PROGRAM D4
+            ON D4.PROGRAM_CD = D3.PROGRAM_CD
+         WHERE D1.DEL_YN    = 'N'
+           AND D1.RETIRE_YN = 'N'
+           AND D4.DEL_YN    = 'N'
+           AND D1.USR_CD    = #{usrCd}
+           AND D4.METHOD    = #{method}
+    </select>
+
+    <insert id="insertAccessHis">
+        /* insertAccessHis : 접속이력 생성 */
+        INSERT INTO PLT_USR_ACCESS_HIS
+             (
+               MENU_CD        /* 메뉴코드 */
+             , PROGRAM_CD     /* 프로그램코드 */
+             , ACCESS_IP      /* 사용자 IP */
+             , ACCESS_MENU    /* 접근메뉴경로 */
+             , REQ_PROGRAM    /* 프로그램명 */
+             , REG_USR_ID     /* 사용자ID */
+             , REG_USR_NM     /* 사용자명 */
+             , REG_USR_SPOT   /* 직책명 */
+             , REG_USR_DEPT   /* 사용자부서명 */
+        <include refid="common.sql.insertSystemFieldByReg"/>
+             )
+        VALUES
+             (
+               #{menuCd}
+             , #{programCd}
+             , #{accessIp}
+             , #{accessMenu}
+             , #{reqProgram}
+             , #{regUsrId}
+             , #{regUsrNm}
+             , #{regUsrSpot}
+             , #{regUsrDept}
+        <include refid="common.sql.insertSystemValueByReg"/>
+             )
+    </insert>
+
+</mapper>

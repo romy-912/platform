@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.department.mapper.CooperationNoticeMapper">
+
+    <delete id="deleteCoopNoticeByBrdCd">
+        /* deleteCoopNoticeByBrdCd : 부서운영현황 공지사항 삭제 */
+        DELETE
+          FROM PLT_COOP_NOTICE
+         WHERE BRD_CD = #{brdCd}
+    </delete>
+
+    <select id="selectCoopNoticeCode" resultType="java.lang.String">
+        /* selectCoopNoticeCode : 부서운영현황 공지사항 코드 조회 */
+        SELECT NOTICE_CD
+          FROM PLT_COOP_NOTICE 
+         WHERE BRD_CD = #{brdCd}
+    </select>
+
+    <insert id="mergeCoopNoticeForCommuNotice">
+        /* mergeCoopNoticeForCommuNotice : 부서운영현황 공지사항 저장 */
+         MERGE INTO PLT_COOP_NOTICE TGT
+         USING
+             (
+               SELECT #{noticeCd}                         AS NOTICE_CD
+                    , D1.BRD_CD
+                    , D1.BRD_TIT
+                    , D1.BRD_SCH_CONT
+                    , CONVERT(VARCHAR(8), GETDATE(), 112) AS STANDARD_DATE
+                    , D3.SAP_GROUP_CODE
+                 FROM PLT_BRD D1
+                INNER JOIN PLT_DEPT D2 
+                   ON D2.DEPT_CD = D1.DEPT_CD
+                 LEFT OUTER JOIN SAP_TBL_DEPT_NEW D3
+                   ON D3.DEPT_CODE = D2.SAP_MIS_DEPT_CD
+                WHERE BRD_CD = #{brdCd}
+             ) SRC
+            ON
+             (
+                   TGT.NOTICE_CD = SRC.NOTICE_CD
+               AND TGT.BRD_CD    = SRC.BRD_CD
+             )
+          WHEN MATCHED THEN
+        UPDATE
+           SET TGT.NOTICE_TITLE   = SRC.BRD_TIT
+             , TGT.NOTICE_DETAIL  = SRC.BRD_SCH_CONT
+             , TGT.USR_CD         = #{session.usrCd}
+             , TGT.STANDARD_DATE  = SRC.STANDARD_DATE
+             , TGT.SAP_GROUP_CODE = SRC.SAP_GROUP_CODE
+        <include refid="common.sql.updateSystemColumn" />
+          WHEN NOT MATCHED THEN
+        INSERT
+             (
+               NOTICE_CD        /* 공지사항코드 */
+             , NOTICE_YN        /* 공지여부 */
+             , NOTICE_TITLE     /* 제목 */
+             , NOTICE_DETAIL    /* 상세정보 */
+             , USR_CD           /* 담당자 */
+             , STANDARD_DATE    /* 기준일자 */
+             , SAP_GROUP_CODE   /* SAP연동 부문코드 */
+             , BRD_CD           /* 게시판코드 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+             (
+               SRC.NOTICE_CD
+             , 'Y'
+             , SRC.BRD_TIT
+             , SRC.BRD_SCH_CONT
+             , #{session.usrCd}
+             , SRC.STANDARD_DATE
+             , SRC.SAP_GROUP_CODE
+             , SRC.BRD_CD
+        <include refid="common.sql.insertSystemValue" />
+             ) ;
+    </insert>
+
+</mapper>

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.CopyMapper">
+
+    <select id="selectCopyTemporary" resultType="com.romy.platform.main.common.dvo.CopyTemporaryDvo">
+        /* selectCopyTemporary : 복사 객체 정보 조회 */
+        SELECT CT_CD                     /* 복사코드 */
+             , DIV                       /* 구분 */
+             , DATA_TYPE                 /* 파일폴더구분 */
+             , FILE_ATT_CD               /* 파일코드 */
+             , FOLDER_CD                 /* 폴더코드 */
+             , BEFORE_FILE_GRP           /* 복사-파일그룹 */
+             , BEFORE_PRJ_CD             /* 복사-프로젝트코드 */
+             , BEFORE_PRJ_PROC_CD        /* 복사-프로젝트공정코드 */
+             , BEFORE_PROC_CD            /* 복사-공정코드 */
+             , BEFORE_PARENT_FOLDER_CD   /* 복사-부모폴더코드 */
+             , AFTER_FILE_GRP            /* 붙여넣기-파일그룹 */
+             , AFTER_PRJ_CD              /* 붙여넣기-프로젝트코드 */
+             , AFTER_PRJ_PROC_CD         /* 붙여넣기-프로젝트공정코드 */
+             , AFTER_PROC_CD             /* 붙여넣기-공정코드 */
+             , AFTER_PARENT_FOLDER_CD    /* 붙여넣기-부모폴더코드 */
+          FROM PLT_COPY_TEMPORARY
+         WHERE REG_USR_CD      = #{usrCd}
+        <if test="div != null and div != ''">
+           AND DIV             = #{div}
+        </if>
+        <if test="fileGrp != null and fileGrp != ''">
+           AND BEFORE_FILE_GRP = #{fileGrp}
+        </if>
+         ORDER BY CT_CD
+    </select>
+
+    <insert id="insertCopyHistory">
+        /* insertCopyHistory : 복사 개체 이력 생성 */
+        INSERT INTO PLT_COPY_HISTORY
+             (
+               DIV         /* 구분 */
+             , DATA_TYPE   /* 데이터유형 */
+             , F_CD        /* 파일코드 */
+             , F_NAME      /* 파일명 */
+             , F_GRP       /* 파일그룹 */
+             , F_REF_CD    /* 파일참조코드 */
+             , B_GRP       /* 이전 파일그룹 */
+             , A_GRP       /* 이후 파일그룹 */
+             , AFTER_CD    /* 연결파일코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{div}
+             , 'FILE'
+             , #{fCd}
+             , #{fName}
+             , #{fGrp}
+             , #{fRefCd}
+             , #{bGrp}
+             , #{aGrp}
+             , #{afterCd}
+            <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <insert id="insertCopyHistoryForFileCut">
+        /* insertCopyHistoryForFileCut : 파일 잘라내기 이력 생성 */
+        INSERT INTO PLT_COPY_HISTORY
+             (
+               DIV         /* 구분 */
+             , DATA_TYPE   /* 데이터유형 */
+             , F_CD        /* 파일코드 */
+             , F_NAME      /* 파일명 */
+             , F_GRP       /* 파일그룹 */
+             , F_REF_CD    /* 파일참조코드 */
+             , B_GRP       /* 이전 파일그룹 */
+             , A_GRP       /* 이후 파일그룹 */
+             , AFTER_CD    /* 연결파일코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        SELECT 'CUT'
+             , 'FILE'
+             , FILE_ATT_CD
+             , FILE_NM
+             , FILE_GRP
+             , FILE_REF_CD
+             , FILE_GRP
+             , #{newFileGrp}
+             , FILE_ATT_CD
+        <include refid="common.sql.insertSystemValueByReg" />
+          FROM PLT_FILE_ATT
+         WHERE FILE_ATT_CD IN
+                        <foreach collection="list" item="item" open="(" close=")" separator=",">
+                               #{item}
+                        </foreach>
+    </insert>
+
+    <delete id="deleteCopyTemporary">
+        /* deleteCopyTemporary : 복사개체 삭제 */
+        DELETE
+          FROM PLT_COPY_TEMPORARY
+         WHERE REG_USR_CD = #{usrCd}
+    </delete>
+
+    <insert id="insertCopyTemporarys">
+        /* insertCopyTemporarys : 복사 개체 추가 */
+        INSERT INTO PLT_COPY_TEMPORARY
+             (
+               CT_CD                     /* 복사코드 */
+             , DIV                       /* 구분 */
+             , DATA_TYPE                 /* 파일폴더구분 */
+             , FILE_ATT_CD               /* 파일코드 */
+             , FOLDER_CD                 /* 폴더코드 */
+             , BEFORE_FILE_GRP           /* 복사-파일그룹 */
+             , BEFORE_PRJ_CD             /* 복사-프로젝트코드 */
+             , BEFORE_PRJ_PROC_CD        /* 복사-프로젝트공정코드 */
+             , BEFORE_PROC_CD            /* 복사-공정코드 */
+             , BEFORE_PARENT_FOLDER_CD   /* 복사-부모폴더코드 */
+             , AFTER_FILE_GRP            /* 붙여넣기-파일그룹 */
+             , AFTER_PRJ_CD              /* 붙여넣기-프로젝트코드 */
+             , AFTER_PRJ_PROC_CD         /* 붙여넣기-프로젝트공정코드 */
+             , AFTER_PROC_CD             /* 붙여넣기-공정코드 */
+             , AFTER_PARENT_FOLDER_CD    /* 붙여넣기-부모폴더코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+             (
+               #{item.ctCd}
+             , #{item.div}
+             , #{item.dataType}
+             , #{item.fileAttCd}
+             , #{item.folderCd}
+             , #{item.beforeFileGrp}
+             , #{item.beforePrjCd}
+             , #{item.beforePrjProcCd}
+             , #{item.beforeProcCd}
+             , #{item.beforeParentFolderCd}
+             , #{item.afterFileGrp}
+             , #{item.afterPrjCd}
+             , #{item.afterPrjProcCd}
+             , #{item.afterProcCd}
+             , #{item.afterParentFolderCd}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+        </foreach>
+    </insert>
+
+
+</mapper>

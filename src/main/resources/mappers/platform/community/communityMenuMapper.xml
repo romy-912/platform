@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.community.mapper.CommunityMenuMapper">
+
+    
+    <select id="selectCommunityMenus" resultType="com.romy.platform.main.community.dto.CommunityMenuDto$SearchRes">
+        /* selectCommunityMenus : 커뮤니티 메뉴 조회 */
+        SELECT 'NOTICE'  AS MENU_CD      /* 메뉴코드 */
+             , '공지사항' AS MENU_NM      /* 메뉴명 */
+             , 'N'       AS FOLDER_YN    /* 폴더여부 */
+             , NULL      AS FOLDER_GRP   /* 폴더그룹코드 */
+             , 'true'    AS ENABLE       /* 활성화여부 */
+    </select>
+
+    <select id="selectCommunityDeptMenus" resultType="com.romy.platform.main.community.dto.CommunityGroupDto$GroupRes">
+        /* selectCommunityDeptMenus : 커뮤니티 소속부서 메뉴 조회 */
+        <include refid="community.common.sql.withParentChildDept"/>
+             , OTHER_DEPT AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , DEPT_NM
+                    , SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = ( SELECT TOP 1 DEPT_CD
+                                    FROM DEPT_TREE
+                                   ORDER BY LV DESC )
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , D1.SAP_ORG_LEVEL_CD
+                    , CAST(D2.ORD_STR + RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT D1 
+                INNER JOIN OTHER_DEPT D2
+                   ON D2.DEPT_CD = D1.PARENT_DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+             )
+        /* 1 : 소속부서 상위조직, 2 : 겸직부서, 3 : 소속부서 하위조직, 4 : 타부서, 5 : 내캐비닛 */
+        SELECT DISTINCT DEPT_CD                                    /* 부서코드 */
+             , DEPT_NM                                             /* 부서명 */
+             , 'DEPT'                              AS FOLDER_GRP   /* 폴더그룹코드 */
+             , 1                                   AS ORD_MST      /* 정렬순서1 */
+             , ROW_NUMBER() OVER(ORDER BY LV DESC) AS ORD_DTL      /* 정렬순서2 */
+             , 'true'                              AS ENABLE       /* 활성화여부 */
+          FROM DEPT_TREE
+         UNION ALL
+        SELECT D2.DEPT_CD
+             , D2.DEPT_NM
+             , 'DEPT'
+             , 2
+             , ROW_NUMBER() OVER(ORDER BY D2.SAP_MIS_DEPT_CD, D2.ORD_NUM)
+             , 'true'
+          FROM PLT_USR_CTS D1 
+         INNER JOIN PLT_DEPT D2 
+            ON D2.DEPT_CD = D1.DEPT_CD
+         WHERE D2.DEL_YN = 'N'
+           AND D2.USE_YN = 'Y'
+           AND D1.USR_CD = #{session.usrCd}
+         UNION ALL
+        SELECT D1.DEPT_CD
+             , D1.DEPT_NM
+             , 'DEPT'
+             , 3
+             , ROW_NUMBER() OVER(ORDER BY D1.ORD_STR)
+             , 'false'
+          FROM OTHER_DEPT D1
+         WHERE D1.SAP_ORG_LEVEL_CD <![CDATA[>=]]> '40'
+           AND NOT EXISTS ( SELECT 1
+                              FROM DEPT_TREE
+                             WHERE DEPT_CD = D1.DEPT_CD )
+           AND NOT EXISTS ( SELECT 1
+                              FROM PLT_USR_CTS 
+                             WHERE USR_CD  = #{session.usrCd}
+                               AND DEPT_CD = D1.DEPT_CD )
+           AND (
+                    D1.SAP_ORG_LEVEL_CD <![CDATA[<>]]> '50'
+                 OR EXISTS ( SELECT 1
+                              FROM PLT_USR 
+                             WHERE DEL_YN    = 'N'
+                               AND RETIRE_YN = 'N'
+                               AND DEPT_CD   = D1.DEPT_CD )
+               )
+         UNION ALL
+        SELECT #{session.usrCd}
+             , '내캐비닛'
+             , 'MYDOC'
+             , 5
+             , 1
+             , 'true'
+         ORDER BY ORD_MST, ORD_DTL
+    </select>
+
+
+</mapper>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.auth.mapper.MenuMapper">
+
+    <select id="selectRoleMenus" resultType="com.romy.platform.main.auth.dto.AuthLoginDto$MenuRes">
+        /* selectRoleMenus : 권한별 메뉴 리스트 조회 */
+          WITH MENUS AS
+             (
+               SELECT MENU_CD
+                    , MENU_NM
+                    , PARENT_MENU_CD
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(255)) ORD_STR
+                 FROM PLT_MENU
+                WHERE DEL_YN  = 'N'
+                  AND MENU_CD = '00000000000000000001'
+                UNION ALL
+               SELECT D2.MENU_CD
+                    , D2.MENU_NM
+                    , D2.PARENT_MENU_CD
+                    , CAST(D1.ORD_STR + RIGHT('0000' + CAST(D2.ORD_NUM AS VARCHAR), 4) AS VARCHAR(255)) ORD_STR
+                 FROM MENUS D1
+                INNER JOIN PLT_MENU D2
+                   ON D2.PARENT_MENU_CD = D1.MENU_CD
+                WHERE D2.DEL_YN  = 'N'
+                  AND D2.MENU_YN = 'Y'
+             )
+             , USR_MENU AS
+             (
+               SELECT D2.PROGRAM_CD
+                    , D3.PROGRAM_NM
+                    , CONVERT(NVARCHAR(100), CASE WHEN D3.PROGRAM_URL NOT LIKE '%::%'
+                                                  THEN REPLACE(D3.PROGRAM_URL, #{domain}, '')
+                                                  ELSE D4.MENU_CD
+                                             END) AS MENU_URL
+                    , CASE WHEN D3.PROGRAM_URL LIKE '%::%' THEN 'Y'
+                           ELSE 'N'
+                      END                         AS OPEN_YN
+                    , D4.MENU_CD
+                    , D4.MENU_NM
+                    , D4.PARENT_MENU_CD
+                 FROM PLT_USR_ROLE D1
+                INNER JOIN PLT_ROLE_PROGRAM D2
+                   ON D2.ROLE_CD = D1.ROLE_CD
+                INNER JOIN PLT_PROGRAM D3
+                   ON D3.PROGRAM_CD    = D2.PROGRAM_CD
+                INNER JOIN PLT_MENU D4
+                   ON D4.MENU_CD = D3.MENU_CD
+                WHERE D3.DEL_YN        = 'N'
+                  AND D3.ST_PROGRAM_YN = 'Y'
+                  AND D4.DEL_YN        = 'N'
+                  AND D4.MENU_YN       = 'Y'
+                  AND D1.USR_CD        = #{session.usrCd}
+                UNION ALL
+               SELECT CONVERT(VARCHAR(20), '')
+                    , CONVERT(NVARCHAR(100), '')
+                    , CONVERT(NVARCHAR(100), '')
+                    , ''
+                    , D2.MENU_CD
+                    , D2.MENU_NM
+                    , D2.PARENT_MENU_CD
+                 FROM USR_MENU D1
+                INNER JOIN PLT_MENU D2
+                   ON D2.MENU_CD = D1.PARENT_MENU_CD
+                WHERE D2.DEL_YN  = 'N'
+                  AND D2.MENU_YN = 'Y'
+             )
+        SELECT D1.MENU_CD                      /* 메뉴코드 */
+             , D1.MENU_NM                      /* 메뉴명 */
+             , CASE WHEN D1.PARENT_MENU_CD = '00000000000000000001' THEN NULL
+                    ELSE D1.PARENT_MENU_CD
+               END              AS PARENT_CD   /* 부모메뉴코드 */
+             , MAX(D2.MENU_URL) AS MENU_URL    /* 메뉴경로 */
+             , MAX(D2.OPEN_YN)  AS OPEN_YN     /* 새탭 오픈여부 */
+          FROM MENUS D1
+         INNER JOIN
+             (
+               SELECT DISTINCT PROGRAM_CD
+                    , PROGRAM_NM
+                    , MENU_URL
+                    , OPEN_YN
+                    , MENU_CD
+                    , MENU_NM
+                 FROM USR_MENU
+             ) D2
+            ON D2.MENU_CD = D1.MENU_CD
+         GROUP BY D1.MENU_CD, D1.MENU_NM, D1.PARENT_MENU_CD, D1.ORD_STR
+         ORDER BY D1.ORD_STR
+    </select>
+
+</mapper>

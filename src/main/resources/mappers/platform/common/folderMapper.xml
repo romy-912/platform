@@ -1,0 +1,655 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.FolderMapper">
+
+    <select id="selectFolderChilds" resultType="com.romy.platform.main.common.dvo.FolderChildDvo">
+        /* selectFolderChilds : 폴더 하위구조 조회 */
+          WITH FOLDER AS
+             (
+               SELECT D1.FOLDER_CD
+                    , D1.FOLDER_NM
+                    , D1.PARENT_CD
+                    , D2.FOLDER_NM AS PARENT_NM
+                    , D1.FOLDER_GRP
+                    , D1.FOLD_SECURITY_YN
+                    , D1.ORD_NUM
+                    , CONVERT(NVARCHAR(4000), TRIM(D1.FOLDER_NM)) AS ORG_FILE_PATH
+                 FROM ${tableNm} D1 
+                 LEFT OUTER JOIN ${tableNm} D2 
+                   ON D2.FOLDER_CD = D1.PARENT_CD
+                  AND D2.DEL_YN    = 'N'
+                WHERE D1.DEL_YN    = 'N'
+                  AND D1.FOLDER_CD = #{folderCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.FOLDER_NM
+                    , D2.PARENT_CD
+                    , D1.FOLDER_NM AS PARENT_NM
+                    , D2.FOLDER_GRP
+                    , D2.FOLD_SECURITY_YN
+                    , D2.ORD_NUM
+                    , CONVERT(NVARCHAR(4000), CONVERT(NVARCHAR(4000), D1.ORG_FILE_PATH) + '/'
+                                            + CONVERT(NVARCHAR(4000), TRIM(D2.FOLDER_NM))) AS ORG_FILE_PATH
+                 FROM FOLDER D1
+                INNER JOIN ${tableNm} D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN = 'N'
+             )
+        SELECT FOLDER_CD          /* 폴더코드 */
+             , FOLDER_NM          /* 폴더명 */
+             , PARENT_CD          /* 부모폴더코드 */
+             , PARENT_NM          /* 부모폴더명 */
+             , FOLDER_GRP         /* 폴더그룹코드 */
+             , FOLD_SECURITY_YN   /* 폴더보안여부 */
+             , ORG_FILE_PATH      /* 폴더구조 */
+          FROM FOLDER
+         ORDER BY ORG_FILE_PATH, ORD_NUM
+    </select>
+
+    <select id="selectFolderChildsForCut" resultType="com.romy.platform.main.common.dvo.FolderChildDvo">
+        /* selectFolderChildsForCut : 폴더 하위구조 조회 */
+          WITH FOLDER AS
+             (
+               SELECT D1.FOLDER_CD
+                    , D1.FOLDER_NM
+                    , D1.PARENT_CD
+                    , D2.FOLDER_NM AS PARENT_NM
+                    , D1.FOLDER_GRP
+                    , D1.FOLD_SECURITY_YN
+                    , D1.ORD_NUM
+                    , CONVERT(NVARCHAR(4000), TRIM(D1.FOLDER_NM)) AS ORG_FILE_PATH
+                 FROM ${tableNm} D1 
+                 LEFT OUTER JOIN ${tableNm} D2 
+                   ON D2.FOLDER_CD = D1.PARENT_CD
+                WHERE D1.FOLDER_CD = #{folderCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.FOLDER_NM
+                    , D2.PARENT_CD
+                    , D1.FOLDER_NM AS PARENT_NM
+                    , D2.FOLDER_GRP
+                    , D2.FOLD_SECURITY_YN
+                    , D2.ORD_NUM
+                    , CONVERT(NVARCHAR(4000), CONVERT(NVARCHAR(4000), D1.ORG_FILE_PATH) + '/'
+                      + CONVERT(NVARCHAR(4000), TRIM(D2.FOLDER_NM))) AS ORG_FILE_PATH
+                 FROM FOLDER D1
+                INNER JOIN ${tableNm} D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN = 'N'
+             )
+        SELECT FOLDER_CD          /* 폴더코드 */
+             , FOLDER_NM          /* 폴더명 */
+             , PARENT_CD          /* 부모폴더코드 */
+             , PARENT_NM          /* 부모폴더명 */
+             , FOLDER_GRP         /* 폴더그룹코드 */
+             , FOLD_SECURITY_YN   /* 폴더보안여부 */
+             , ORG_FILE_PATH      /* 폴더구조 */
+          FROM FOLDER
+         ORDER BY ORG_FILE_PATH, ORD_NUM
+    </select>
+
+    <insert id="insertFolderDownloadHistory">
+        /* insertFolderDownloadHistory : 폴더 다운로드 이력 생성 */
+        INSERT INTO PLT_FOLDER_DL_HISTORY
+             (
+               HISTORY_CD     /* 이력코드 */
+             , FOLDER_CD      /* 폴더코드 */
+             , FOLDER_GRP     /* 폴더그룹코드 */
+             , FOL_DOWN_GRP   /* 폴더다운로드 그룹코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{historyCd}
+             , #{folderCd}
+             , #{folderGrp}
+             , #{folDownGrp}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <insert id="insertFolderFileUpDownHistory">
+        /* insertFolderFileUpDownHistory : 폴더, 파일 업/다운로드 이력 생성 */
+        INSERT INTO PLT_FAF_UD_HISTORY
+             (
+               FAF_UD_CD    /* 업/다운로드 코드 */
+             , UP_REF_CD    /* 참조코드 */
+             , UD_TYPE      /* 업/다운로드 유형 */
+             , FOLDER_GRP   /* 폴더그룹코드 */
+             , END_TYPE     /* 결과코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{fafUdCd}
+             , #{upRefCd}
+             , #{udType}
+             , #{folderGrp}
+             , #{endType}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <select id="selectFolderUpDownCode" resultType="java.lang.String">
+        /* selectFolderUpDownCode : 폴더, 파일 업/다운로드 코드 조회 */
+        SELECT FAF_UD_CD
+          FROM PLT_FAF_UD_HISTORY 
+         WHERE UP_REF_CD  = #{upRefCd}
+           AND UD_TYPE    = #{udType}
+           AND FOLDER_GRP = #{folderGrp}
+    </select>
+
+    <insert id="mergeFolderFileUpDownHistory">
+        /* mergeFolderFileUpDownHistory : 폴더, 파일 업/다운로드 이력 업데이트 */
+         MERGE PLT_FAF_UD_HISTORY TGT
+         USING ( SELECT #{fafUdCd} AS FAF_UD_CD ) SRC
+            ON ( TGT.FAF_UD_CD = SRC.FAF_UD_CD )
+          WHEN MATCHED THEN
+        UPDATE
+           SET END_TYPE = #{endType}
+          WHEN NOT MATCHED THEN
+        INSERT
+             (
+               FAF_UD_CD    /* 업/다운로드 코드 */
+             , UP_REF_CD    /* 참조코드 */
+             , UD_TYPE      /* 업/다운로드 유형 */
+             , FOLDER_GRP   /* 폴더그룹코드 */
+             , END_TYPE     /* 결과코드 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{fafUdCd}
+             , #{upRefCd}
+             , #{udType}
+             , #{folderGrp}
+             , #{endType}
+        <include refid="common.sql.insertSystemValueByReg" />
+             ) ;
+    </insert>
+
+    <update id="updateFolderUpDownEndType">
+        /* updateFolderUpDownEndType : 폴더, 파일 업/다운로드 결과 업데이트 */
+        UPDATE PLT_FAF_UD_HISTORY
+           SET END_TYPE = #{endType}
+         WHERE FAF_UD_CD = #{fafUdCd}
+    </update>
+
+    <select id="selectFolderAllTrees" resultType="com.romy.platform.main.common.dvo.FolderTreeDvo" fetchSize="1000">
+        /* selectFolderAllTrees : 폴더 트리구조 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+             , FOLDER AS
+             (
+               SELECT FOLDER_CD
+                    , FOLDER_NM
+                    , PARENT_CD
+                    , CAST('' AS NVARCHAR(500)) AS PARENT_NM
+                    , FOLDER_NM                 AS TMP_PARENT_NM
+                    , ORD_NUM
+                    , CAST('/' + '00000001' + '/' + FOLDER_NM AS NVARCHAR(1000)) AS ORD_STR
+                    , 1                         AS LV
+                    , SECTOR_CD
+                    , FOLDER_TYPE
+                    , FOLDER_GRP
+                    , REG_USR_CD
+                    , FOLD_SECURITY_YN
+                 FROM PLT_FOLDER S1 
+                WHERE DEL_YN     = 'N'
+                  AND PARENT_CD  = 'ROOT'
+                  AND FOLDER_GRP = #{folderGrp}
+                  AND SECTOR_CD  = #{sectorCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.FOLDER_NM
+                    , D2.PARENT_CD
+                    , CAST(D1.TMP_PARENT_NM AS NVARCHAR(500)) AS PARENT_NM
+                    , D2.FOLDER_NM                            AS TMP_PARENT_NM
+                    , D2.ORD_NUM
+                    , CAST(D1.ORD_STR + '/' + RIGHT('00000000' + CAST( (D1.LV + 1) AS VARCHAR(8)), 8) + '/' + D2.FOLDER_NM AS NVARCHAR(1000)) AS ORD_STR
+                    , D1.LV + 1                               AS LV
+                    , D2.SECTOR_CD
+                    , D2.FOLDER_TYPE
+                    , D2.FOLDER_GRP
+                    , D2.REG_USR_CD
+                    , D2.FOLD_SECURITY_YN
+                 FROM FOLDER D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN      = 'N'
+                  AND D2.FOLDER_TYPE = 2
+                  AND D2.FOLDER_GRP  = #{folderGrp}
+                  AND D2.SECTOR_CD   = #{sectorCd}
+                  AND (
+                           D2.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                        OR (     D2.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                        <include refid="community.common.sql.wherePermissionCond">
+                            <property name="column" value="D2.FOLDER_CD"/>
+                            <property name="groupColumn" value="D2.FOLDER_GRP"/>
+                            <property name="deptColumn" value="D2.SECTOR_CD"/>
+                        </include>
+                           )
+                      )
+             )
+        SELECT D1.FOLDER_CD                                /* 폴더코드 */
+             , D1.FOLDER_NM                                /* 폴더명 */
+             , D1.PARENT_CD                                /* 부모폴더코드 */
+             , D1.PARENT_NM                                /* 부모폴더명 */
+             , D1.ORD_NUM                                  /* 정렬순서 */
+             , D1.LV                                       /* 레벨 */
+             , D1.FOLDER_TYPE                              /* 폴더유형 */
+             , D1.FOLD_SECURITY_YN                         /* 보안여부 */
+             , D1.REG_USR_CD             AS OWNER_USR_CD   /* 폴더 소유자코드 */
+             , D2.USR_NM                 AS OWNER_USR_NM   /* 폴더 소유자 */
+             , 0                         AS FOLDER_SIZE    /* 폴더 사이즈 */
+          FROM FOLDER D1
+          LEFT OUTER JOIN PLT_USR D2 
+            ON D2.USR_CD = D1.REG_USR_CD
+         ORDER BY D1.ORD_STR
+    </select>
+
+    <select id="selectFolderAllTreesForUpdate" resultType="com.romy.platform.main.common.dvo.FolderTreeDvo" fetchSize="1000">
+        /* selectFolderAllTreesForUpdate : 폴더 트리구조 조회 */
+          WITH FOLDER AS
+             (
+               SELECT FOLDER_CD
+                    , FOLDER_NM
+                    , PARENT_CD
+                    , CAST('/' + '00000001' + '/' + FOLDER_NM AS NVARCHAR(1000)) AS ORD_STR
+                    , 1 AS LV
+                 FROM PLT_FOLDER S1 
+                WHERE DEL_YN     = 'N'
+                  AND PARENT_CD  = 'ROOT'
+                  AND FOLDER_GRP = #{folderGrp}
+                  AND SECTOR_CD  = #{sectorCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.FOLDER_NM
+                    , D2.PARENT_CD
+                    , CAST(D1.ORD_STR + '/' + RIGHT('00000000' + CAST( (D1.LV + 1) AS VARCHAR(8)), 8) + '/' + D2.FOLDER_NM AS NVARCHAR(1000)) AS ORD_STR
+                    , D1.LV + 1 AS LV
+                 FROM FOLDER D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN      = 'N'
+                  AND D2.FOLDER_TYPE = 2
+                  AND D2.FOLDER_GRP  = #{folderGrp}
+                  AND D2.SECTOR_CD   = #{sectorCd}
+             )
+        SELECT FOLDER_CD   /* 폴더코드 */
+             , FOLDER_NM   /* 폴더명 */
+             , PARENT_CD   /* 부모폴더코드 */
+        FROM FOLDER
+        ORDER BY ORD_STR
+    </select>
+
+    <select id="selectFolderInfo" resultType="com.romy.platform.main.common.dvo.FolderDvo">
+        /* selectFolderInfo : 폴더정보 조회 */
+        SELECT FOLDER_CD          /* 폴더코드 */
+             , FOLDER_NM          /* 폴더명 */
+             , PARENT_CD          /* 부모폴더코드 */
+             , FOLDER_GRP         /* 폴더그룹코드 */
+             , FOLDER_TYPE        /* 폴더타입 */
+             , ORD_NUM            /* 정렬순서 */
+             , SECTOR_CD          /* 부문-사용자코드 */
+             , OPEN_DEPT_CD       /* 공개범위 부서코드 */
+             , FOLD_SECURITY_YN   /* 폴더보안여부 */
+             , REG_DTT            /* 등록일시 */
+             , MOD_DTT            /* 수정일시 */
+             , REG_USR_CD         /* 등록사용자코드 */
+          FROM PLT_FOLDER 
+         WHERE DEL_YN    = 'N'
+           AND FOLDER_CD = #{folderCd}
+    </select>
+
+    <select id="selectOrdNumMaxByParentCd" resultType="java.lang.Integer">
+        /* selectOrdNumMaxByParentCd : 정렬순서 최대값 조회 */
+        SELECT ISNULL(MAX(ORD_NUM), 0)
+          FROM PLT_FOLDER 
+         WHERE DEL_YN    = 'N'
+           AND PARENT_CD = #{parentCd}
+    </select>
+
+    <insert id="insertFolder">
+        /* insertFolder : 폴더 생성 */
+        INSERT INTO PLT_FOLDER
+             (
+               FOLDER_CD       /* 폴더코드 */
+             , FOLDER_NM       /* 폴더명 */
+             , PARENT_CD       /* 부모폴더코드 */
+             , FOLDER_GRP      /* 폴더그룹코드 */
+             , FOLDER_TYPE     /* 폴더타입 */
+             , ORD_NUM         /* 정렬순서 */
+             , SECTOR_CD       /* 부문-사용자코드 */
+             , TEMP_GRP        /* 임시 그룹코드 */
+             , TEMP_LV         /* 임시 레벨 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        VALUES
+             (
+               #{folderCd}
+             , #{folderNm, jdbcType=NVARCHAR}
+             , #{parentCd}
+             , #{folderGrp}
+             , #{folderType}
+             , #{ordNum}
+             , #{sectorCd}
+             , #{tempGrp}
+             , #{tempLv}
+        <include refid="common.sql.insertSystemValue" />
+             )
+    </insert>
+
+    <insert id="insertFileAttFolder">
+        /* insertFileAttFolder : 프로젝트 폴더 생성 */
+        INSERT INTO PLT_FILE_ATT_FOLDER
+             (
+               FOLDER_CD       /* 폴더코드 */
+             , FOLDER_NM       /* 폴더명 */
+             , PARENT_CD       /* 부모폴더코드 */
+             , FOLDER_REF_CD   /* 참조코드 */
+             , LEVEL           /* 레벨 */
+             , FOLDER_GRP      /* 폴더그룹코드 */
+             , ORD_NUM         /* 정렬순서 */
+             , DEL_YN          /* 삭제여부 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+             (
+               #{folderCd}
+             , #{folderNm, jdbcType=NVARCHAR}
+             , #{parentCd}
+             , #{folderRefCd}
+             , #{level}
+             , #{folderGrp}
+             , ( SELECT COUNT(1) + 1 FROM PLT_FILE_ATT_FOLDER WHERE FOLDER_REF_CD = #{folderRefCd} )
+             , 'N'
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+    </insert>
+
+    <update id="updateFolderName">
+        /* updateFolderName : 폴더명 변경 */
+        UPDATE PLT_FOLDER
+           SET FOLDER_NM = #{folderNm, jdbcType=NVARCHAR}
+        <include refid="common.sql.updateSystemColumn" />
+         WHERE DEL_YN    = 'N'
+           AND FOLDER_CD = #{folderCd}
+    </update>
+
+    <select id="selectNoPermissionFolders" resultType="java.lang.String">
+        /* selectNoPermissionFolders : 권한 없는 폴더 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+             , CHILD_FOLDER AS
+             (
+               SELECT D1.FOLDER_CD
+                    , D1.PARENT_CD
+                    , D1.FOLDER_GRP
+                    , D1.FOLD_SECURITY_YN
+                    , D1.SECTOR_CD
+                 FROM PLT_FOLDER D1 
+                WHERE D1.DEL_YN     = 'N'
+                  AND D1.FOLDER_CD  = #{folderCd}
+                  AND D1.FOLDER_GRP = #{folderGrp}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.PARENT_CD
+                    , D2.FOLDER_GRP
+                    , D2.FOLD_SECURITY_YN
+                    , D2.SECTOR_CD
+                 FROM CHILD_FOLDER D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN     = 'N'
+                  AND D2.FOLDER_GRP = #{folderGrp}
+             )
+        SELECT FOLDER_CD
+          FROM CHILD_FOLDER D1
+         WHERE NOT EXISTS ( <include refid="community.common.sql.selectUsrAuthRole">
+                                <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                            </include> )   /* 권한체크 */
+           AND NOT(     D1.FOLDER_GRP <![CDATA[<>]]> 'DEPT'
+                    AND EXISTS ( <include refid="community.common.sql.selectUsrDeptAuthRole">
+                                    <property name="deptColumn" value="D1.SECTOR_CD"/>
+                                </include> )
+                  )
+           AND (
+                    ( D1.FOLDER_GRP NOT IN ('DEPT', 'GROUP') AND D1.FOLD_SECURITY_YN = 'Y' )
+                 OR (
+                       D1.FOLDER_GRP IN ('DEPT', 'GROUP')
+                <include refid="community.common.sql.whereNoPermissionCond">
+                    <property name="column" value="D1.FOLDER_CD"/>
+                </include>
+                    )
+               )
+    </select>
+
+    <select id="selectNoPermissionFolder" resultType="java.lang.String">
+        /* selectNoPermissionFolder : 권한 없는 폴더 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+        SELECT D1.FOLDER_CD
+          FROM PLT_FOLDER D1 
+         WHERE D1.FOLDER_CD = #{folderCd}
+           AND NOT EXISTS ( <include refid="community.common.sql.selectUsrAuthRole">
+                                <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                            </include> )   /* 권한체크 */
+           AND NOT(     D1.FOLDER_GRP = 'DEPT'
+                    AND EXISTS ( <include refid="community.common.sql.selectUsrDeptAuthRole">
+                                    <property name="deptColumn" value="D1.SECTOR_CD"/>
+                                </include> )
+                  )
+           AND (
+                    ( D1.FOLDER_GRP NOT IN ('DEPT', 'GROUP') AND D1.FOLD_SECURITY_YN = 'Y' )
+                 OR ( D1.FOLDER_GRP IN ('DEPT', 'GROUP')
+                <include refid="community.common.sql.whereNoPermissionCond">
+                    <property name="column" value="D1.FOLDER_CD"/>
+                </include>
+                    )
+               )
+    </select>
+
+    <select id="selectFolderPath" resultType="java.lang.String">
+        /* selectFolderPath : 폴더 경로 조회 */
+        SELECT dbo.fn_get_task_folder_depth_fullname(#{folderCd})
+    </select>
+
+    <select id="selectFolderRootPath" resultType="java.lang.String">
+        /* selectFolderRootPath : 폴더 루트 경로 조회 */
+        SELECT CASE WHEN D1.FOLDER_GRP = 'DEPT'  THEN D2.DEPT_NM
+                    WHEN D1.FOLDER_GRP = 'GROUP' THEN D3.GROUP_NM
+                    WHEN D1.FOLDER_GRP = 'PROPOSAL' THEN D5.PROC_NM
+               END
+          FROM PLT_FOLDER D1 
+          LEFT OUTER JOIN PLT_DEPT D2 
+            ON D2.DEPT_CD = D1.SECTOR_CD
+           AND D2.DEL_YN  = 'N'
+          LEFT OUTER JOIN PLT_COMMU_GROUP D3 
+            ON D3.GROUP_CD = D1.SECTOR_CD
+           AND D3.DEL_YN   = 'N'
+          LEFT OUTER JOIN PLT_PROPOSAL_PROC D4 
+            ON D4.PROPOSAL_PROC_CD = D1.SECTOR_CD
+           AND D4.DEL_YN = 'N'
+          LEFT OUTER JOIN PLT_PROC D5 
+            ON D5.PROC_CD = D4.PROC_CD
+           AND D5.DEL_YN  = 'N'
+         WHERE D1.FOLDER_CD = #{folderCd}
+    </select>
+
+    <delete id="deleteFolder">
+        /* deleteFolder : 폴더 삭제 */
+        UPDATE PLT_FOLDER
+           SET DEL_YN = 'Y'
+         WHERE FOLDER_CD = #{folderCd}
+    </delete>
+
+    <update id="updateParentFolderCd">
+        /* updateParentFolderCd : 부모 폴더코드 변경 */
+        UPDATE PLT_FOLDER
+           SET DEL_YN    = 'N'
+             , PARENT_CD  = #{dvo.folderCd}
+             , FOLDER_GRP = #{dvo.folderGrp}
+             , SECTOR_CD  = #{dvo.sectorCd}
+        <include refid="common.sql.updateSystemColumn" />
+         WHERE FOLDER_CD IN
+                    <foreach collection="list" item="item" open="(" close=")" separator=",">
+                             #{item}
+                    </foreach>
+    </update>
+
+    <update id="updateFolder">
+        /* updateFolder : 폴더 수정 */
+        UPDATE PLT_FOLDER
+           SET DEL_YN     = 'N'
+        <if test="folderNm != null">
+             , FOLDER_NM  = #{folderNm}
+        </if>
+        <if test="parentCd != null">
+             , PARENT_CD  = #{parentCd}
+        </if>
+        <if test="folderGrp != null">
+             , FOLDER_GRP = #{folderGrp}
+        </if>
+        <if test="ordNum != null">
+             , ORD_NUM    = #{ordNum}
+        </if>
+        <if test="sectorCd != null">
+             , SECTOR_CD  = #{sectorCd}
+        </if>
+        <include refid="common.sql.updateSystemColumn" />
+         WHERE FOLDER_CD = #{folderCd}
+    </update>
+
+    <update id="updateFolderOnlyField">
+        /* updateFolderOnlyField : 폴더 수정 (Audit 제외) */
+        UPDATE PLT_FOLDER
+           SET DEL_YN     = 'N'
+        <if test="folderNm != null">
+             , FOLDER_NM  = #{folderNm}
+        </if>
+        <if test="parentCd != null">
+             , PARENT_CD  = #{parentCd}
+        </if>
+        <if test="folderGrp != null">
+             , FOLDER_GRP = #{folderGrp}
+        </if>
+        <if test="ordNum != null">
+             , ORD_NUM    = #{ordNum}
+        </if>
+        <if test="sectorCd != null">
+             , SECTOR_CD  = #{sectorCd}
+        </if>
+         WHERE FOLDER_CD = #{folderCd}
+    </update>
+
+    <update id="updateProjectFolderOnlyField">
+        /* updateProjectFolderOnlyField : 프로젝트 폴더 수정 (Audit 제외) */
+        UPDATE PLT_FILE_ATT_FOLDER
+           SET DEL_YN        = 'N'
+             , DEL_USR_CD    = NULL
+             , DEL_DTT       = NULL
+        <if test="folderNm != null">
+             , FOLDER_NM     = #{folderNm, jdbcType=NVARCHAR}
+        </if>
+        <if test="folderRefCd != null">
+             , FOLDER_REF_CD = #{folderRefCd}
+        </if>
+        <if test="folderGrp != null">
+             , FOLDER_GRP    = #{folderGrp}
+        </if>
+        <if test="parentCd != null">
+             , PARENT_CD     = #{parentCd}
+        </if>
+        <if test="level != null">
+             , LEVEL         = #{level}
+        </if>
+         WHERE FOLDER_CD = #{folderCd}
+    </update>
+
+    <update id="deleteProjectFolder">
+        /* deleteProjectFolder : 프로젝트 폴더 삭제 */
+        UPDATE PLT_FILE_ATT_FOLDER
+           SET DEL_YN = 'Y'
+        <include refid="common.sql.deleteSystemColumn" />
+         WHERE FOLDER_CD = #{folderCd}
+    </update>
+
+    <select id="selectNoPermissionProjectFolders" resultType="java.lang.String">
+        /* selectNoPermissionProjectFolders : 권한 없는 프로젝트 폴더 조회 */
+          WITH CHILD_FOLDER AS
+             (
+               SELECT FOLDER_CD
+                    , PARENT_CD
+                    , FOLD_SECURITY_YN
+                 FROM PLT_FILE_ATT_FOLDER 
+                WHERE DEL_YN     = 'N'
+                  AND FOLDER_CD  = #{folderCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.PARENT_CD
+                    , D2.FOLD_SECURITY_YN
+                 FROM CHILD_FOLDER D1
+                INNER JOIN PLT_FILE_ATT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.FOLDER_CD
+                WHERE D2.DEL_YN     = 'N'
+             )
+        SELECT FOLDER_CD
+          FROM CHILD_FOLDER
+         WHERE FOLD_SECURITY_YN = 'Y'
+    </select>
+
+    <select id="selectProjectFolderInfo" resultType="com.romy.platform.main.common.dvo.FileAttFolderDvo">
+        /* selectProjectFolderInfo : 프로젝트 폴더 정보 조회 */
+        SELECT FOLDER_CD          /* 폴더코드 */
+             , FOLDER_NM          /* 폴더명 */
+             , PARENT_CD          /* 부모폴더코드 */
+             , FOLDER_REF_CD      /* 폴더참조코드 */
+             , LEVEL              /* 레벨 */
+             , FOLDER_GRP         /* 폴더그룹코드 */
+             , FOLD_SECURITY_YN   /* 폴더보안여부 */
+          FROM PLT_FILE_ATT_FOLDER 
+         WHERE DEL_YN    = 'N'
+           AND FOLDER_CD = #{folderCd}
+    </select>
+
+    <select id="selectFolderSize" resultType="java.lang.Long">
+        /* selectFolderSize : 폴더 용량 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+             , FOLDER_TREE AS
+             (
+               SELECT FOLDER_CD AS ROOT_FOLDER
+                    , FOLDER_CD AS CHILD_FOLDER
+                    , FOLDER_GRP
+                 FROM PLT_FOLDER 
+                WHERE DEL_YN     = 'N'
+                  AND FOLDER_CD  = #{folderCd}
+                UNION ALL
+               SELECT D1.ROOT_FOLDER
+                    , D2.FOLDER_CD
+                    , D2.FOLDER_GRP
+                 FROM FOLDER_TREE D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.PARENT_CD = D1.CHILD_FOLDER
+                WHERE D2.DEL_YN      = 'N'
+                  AND (
+                           D2.FOLDER_GRP NOT IN ('DEPT', 'GROUP')     /* 폴더그룹이 커뮤니티가 아닌 경우 */
+                        OR (     D2.FOLDER_GRP IN ('DEPT', 'GROUP')   /* 폴더그룹이 커뮤니티인 경우 권한체크 */
+                        <include refid="community.common.sql.wherePermissionCond">
+                            <property name="column" value="D2.FOLDER_CD"/>
+                            <property name="groupColumn" value="D2.FOLDER_GRP"/>
+                            <property name="deptColumn" value="D2.SECTOR_CD"/>
+                        </include>
+                           )
+                      )
+             )
+        SELECT ISNULL(SUM(S2.FILE_SIZE), 0)
+          FROM FOLDER_TREE S1
+         INNER JOIN PLT_FILE_ATT S2 
+            ON S2.FILE_REF_CD = S1.CHILD_FOLDER
+           AND S2.FILE_GRP    = S1.FOLDER_GRP
+         WHERE S2.DEL_YN            = 'N'
+        <if test=' "Y".equals(finalYn) '>
+           AND S2.FILE_FINAL_VER_YN = 'Y'
+        </if>
+    </select>
+
+
+</mapper>

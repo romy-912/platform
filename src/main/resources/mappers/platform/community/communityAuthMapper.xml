@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.community.mapper.CommunityAuthMapper">
+
+
+    <select id="selectFolderCreatePermission" resultType="java.lang.String">
+        /* selectFolderCreatePermission : 커뮤니티 폴더 생성 권한 조회 */
+          WITH USER_DEPT AS
+             (
+               SELECT CASE WHEN #{session.deptCd} IS NULL
+                           THEN ( SELECT DEPT_CD FROM PLT_USR  WHERE USR_CD = ISNULL(#{usrCd}, #{session.usrCd}) )
+                           ELSE #{session.deptCd}
+                      END AS DEPT_CD
+             )
+             , DEPT_TREE AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , DEPT_NM
+                    , SAP_ORG_LEVEL_CD
+                    , CONVERT(VARCHAR(1000), RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4)) AS ORD_STR
+                    , 0 AS LV
+                    , CAST('SELF' AS VARCHAR(10)) AS DIR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = ( SELECT DEPT_CD FROM USER_DEPT )
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , D1.SAP_ORG_LEVEL_CD
+                    , CONVERT(VARCHAR(1000), RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) + D2.ORD_STR) AS ORD_STR
+                    , D2.LV + 1
+                    , CAST('PARENT' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.PARENT_DEPT_CD = D1.DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'PARENT')
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , D1.SAP_ORG_LEVEL_CD
+                    , CONVERT(VARCHAR(1000), D2.ORD_STR + RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4)) AS ORD_STR
+                    , D2.LV + 1
+                    , CAST('CHILD' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.DEPT_CD = D1.PARENT_DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'CHILD')
+             )
+        SELECT 'Y'
+         WHERE EXISTS ( SELECT 1
+                          FROM DEPT_TREE
+                         WHERE DEPT_CD = #{deptCd} )
+            OR EXISTS ( SELECT 1
+                          FROM PLT_USR_CTS 
+                         WHERE USR_CD  = ISNULL(#{session.usrCd}, #{usrCd})
+                           AND DEPT_CD = #{deptCd} )
+            OR EXISTS ( SELECT USR_CD
+                          FROM PLT_USR_ROLE
+                         WHERE USR_CD   = ISNULL(#{session.usrCd}, #{usrCd})
+                           AND ROLE_CD IN ('00000000000000000000', 'ROLE_PROJECT_TF') )
+    </select>
+
+    <select id="selectCommunityAuthorizations" resultType="com.romy.platform.main.community.dto.CommunityAuthDto$AuthRes">
+        /* selectCommunityAuthorizations : 커뮤니티 폴더/파일 권한 조회 */
+        SELECT D1.FOLDER_FILE_CD   /* 폴더/파일코드 */
+             , D1.AUTH_CD          /* 권한코드 */
+             , CASE D1.AUTH_DIV WHEN 'DEPT'  THEN ISNULL(D2.DEPT_NM, '삭제부서')
+                                WHEN 'GROUP' THEN ISNULL(D3.GROUP_NAME, '삭제그룹')
+                                WHEN 'USER'  THEN ISNULL(CONCAT(D4.USR_NM, ' ', D4.SAP_SPOT_NM), '퇴직자')
+               END AS AUTH_NM      /* 권한명 */
+             , D1.AUTH_DIV         /* 권한구분 */
+             , CASE D1.AUTH_DIV WHEN 'DEPT'  THEN '부서'
+                                WHEN 'GROUP' THEN '그룹'
+                                WHEN 'USER'  THEN '사용자'
+               END AS AUTH_DIV_NM  /* 권한구분명 */
+          FROM PLT_COMMU_AUTH D1 
+          LEFT OUTER JOIN PLT_DEPT D2 
+            ON D2.DEPT_CD  = D1.AUTH_CD
+           AND D2.DEL_YN   = 'N'
+           AND D2.USE_YN   = 'Y'
+           AND D1.AUTH_DIV = 'DEPT'
+          LEFT OUTER JOIN PLT_MY_GROUP D3 
+            ON D3.MG_CD    = D1.AUTH_CD
+           AND D3.DEL_YN   = 'N'
+           AND D1.AUTH_DIV = 'GROUP'
+          LEFT OUTER JOIN PLT_USR D4 
+            ON D4.USR_CD    = D1.AUTH_CD
+           AND D4.DEL_YN    = 'N'
+           AND D4.RETIRE_YN = 'N'
+           AND D1.AUTH_DIV  = 'USER'
+         WHERE D1.FOLDER_FILE_CD = #{folderFileCd}
+         ORDER BY D1.AUTH_DIV, D2.SAP_ORG_LEVEL_CD, D2.ORD_NUM, D3.GROUP_NAME, D4.SAP_SPOT_CD, D4.USR_NM
+    </select>
+
+    <select id="selectAuthDeletePermission" resultType="java.lang.String">
+        /* selectAuthDeletePermission : 삭제 권한 조회 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+    <choose>
+      <when test=' "Y".equals(folderYn) '>
+             , FOLDER_INFO AS
+             (
+               SELECT SECTOR_CD
+                    , FOLDER_GRP
+                 FROM PLT_FOLDER 
+                WHERE DEL_YN    = 'N'
+                  AND FOLDER_CD = #{folderFileCd}
+             )
+        SELECT 'Y'
+          FROM FOLDER_INFO D1
+         WHERE D1.FOLDER_GRP <![CDATA[<>]]> 'DEPT'
+            OR (
+                      D1.FOLDER_GRP = 'DEPT'
+                 AND (
+                          EXISTS ( SELECT 1
+                                     FROM DEPT_TREE
+                                    WHERE DEPT_CD = D1.SECTOR_CD )
+                       OR EXISTS ( SELECT 1
+                                     FROM PLT_USR_CTS 
+                                    WHERE USR_CD  = #{session.usrCd}
+                                      AND DEPT_CD = D1.SECTOR_CD )
+                       OR EXISTS ( <include refid="community.common.sql.selectUsrAuthRole">
+                                        <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                                   </include> )
+                     )
+               )
+      </when>
+      <otherwise>
+        SELECT 'Y'
+          FROM PLT_FILE_ATT D1 
+         INNER JOIN PLT_FOLDER D2 
+            ON D2.FOLDER_CD  = D1.FILE_REF_CD
+           AND D2.FOLDER_GRP = D1.FILE_GRP
+         WHERE D1.DEL_YN      = 'N'
+           AND D2.DEL_YN      = 'N'
+           AND D1.FILE_ATT_CD = #{folderFileCd}
+           AND CASE WHEN D1.REG_USR_CD = #{session.usrCd}     THEN 'Y'
+                    WHEN ( SELECT TOP 1 USR_CD
+                             FROM PLT_USR_ROLE 
+                            WHERE USR_CD   = #{session.usrCd}
+                              AND (
+                                       ROLE_CD = '00000000000000000000'
+                                    OR ( D1.FILE_GRP <![CDATA[<>]]> 'GROUP' AND ROLE_CD = 'ROLE_PROJECT_TF' )
+                                  )
+                         ) IS NOT NULL                        THEN 'Y'
+                    WHEN D1.FILE_GRP  = 'DEPT'
+                     AND D2.SECTOR_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                     AND ( SELECT TOP 1 USR_CD
+                             FROM PLT_USR_ROLE 
+                            WHERE USR_CD   = #{session.usrCd}
+                              AND ROLE_CD IN ('00000000000000000002', '00000000000000209753')
+                         ) IS NOT NULL                        THEN 'Y'
+                    WHEN D1.FILE_GRP NOT IN ('DEPT', 'GROUP') THEN CASE WHEN ISNULL(D1.FILE_SECURITY_YN, '') <![CDATA[<>]]> 'Y' THEN 'Y'
+                                                                        ELSE 'N'
+                                                                   END
+                    WHEN D1.FILE_GRP IN ('DEPT', 'GROUP')     THEN CASE WHEN D1.FILE_SECURITY_YN = 'Y' THEN 'N'
+                                                                        ELSE (
+                                                                                <include refid="community.common.sql.selectPermissionYn">
+                                                                                    <property name="column" value="D1.FILE_ATT_CD"/>
+                                                                                    <property name="groupColumn" value="D1.FILE_GRP"/>
+                                                                                    <property name="deptColumn" value="D2.SECTOR_CD"/>
+                                                                                </include>
+                                                                             )
+                                                                   END
+                    ELSE 'N'
+               END            = 'Y'
+      </otherwise>
+    </choose>
+    </select>
+
+    <delete id="deleteCommunityAuth">
+        /* deleteCommunityAuth : 커뮤니티 권한 삭제 */
+        DELETE
+          FROM PLT_COMMU_AUTH
+         WHERE FOLDER_FILE_CD = #{folderFileCd}
+           AND AUTH_CD        = #{authCd}
+    </delete>
+
+    <select id="selectCommunityFolderAuth" resultType="java.lang.String">
+        /* selectCommunityFolderAuth : 커뮤니티 폴더 권한 체크 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+        SELECT 'Y'
+          FROM PLT_FOLDER D1 
+         WHERE D1.DEL_YN = 'N'
+           AND D1.FOLDER_CD = #{folderCd}
+           AND (
+                    EXISTS ( SELECT 1
+                               FROM DEPT_TREE
+                              WHERE DEPT_CD = D1.SECTOR_CD )
+                 OR EXISTS ( SELECT 1
+                               FROM PLT_USR_CTS 
+                              WHERE USR_CD  = #{session.usrCd}
+                                AND DEPT_CD = D1.SECTOR_CD )
+                 OR EXISTS ( <include refid="community.common.sql.selectUsrAuthRole">
+                                <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                             </include> )
+               )
+    </select>
+
+    <insert id="insertCommunityAuths">
+        /* insertCommunityAuths : 커뮤니티 권한 설정 */
+        INSERT INTO PLT_COMMU_AUTH
+             (
+               FOLDER_FILE_CD   /* 폴더/파일코드 */
+             , AUTH_CD          /* 권한코드 */
+             , AUTH_DIV         /* 권한구분 */
+        <include refid="common.sql.insertSystemFieldByReg" />
+             )
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+             (
+               #{folderFileCd}
+             , #{item.authCd}
+             , #{item.authDiv}
+        <include refid="common.sql.insertSystemValueByReg" />
+             )
+        </foreach>
+    </insert>
+
+    <select id="selectMyDocAuthCheck" resultType="java.lang.String">
+        /* selectMyDocAuthCheck : 내캐비닛 권한 체크 */
+        SELECT 'Y'
+          FROM PLT_FOLDER 
+         WHERE DEL_YN     = 'N'
+           AND FOLDER_GRP = 'MYDOC'
+           AND FOLDER_CD  = #{folderCd}
+           AND SECTOR_CD <![CDATA[<>]]> #{session.usrCd}
+    </select>
+
+    <select id="selectGroupDocAuthCheck" resultType="java.lang.String">
+        /* selectGroupDocAuthCheck : 그룹 문서함 권한 체크 */
+     <choose>
+      <when test="sectorCd != null and sectorCd != ''">
+        SELECT 'Y'
+          FROM PLT_COMMU_GROUP D1 
+         INNER JOIN PLT_COMMU_GROUP_USER D2 
+            ON D2.GROUP_CD = D1.GROUP_CD
+           AND D2.USR_CD   = #{session.usrCd}
+         WHERE D1.DEL_YN   = 'N'
+           AND D1.GROUP_CD = #{sectorCd}
+      </when>
+      <otherwise>
+        SELECT 'Y'
+          FROM PLT_FOLDER D1 
+         INNER JOIN PLT_COMMU_GROUP D2 
+            ON D2.GROUP_CD = D1.SECTOR_CD
+           AND D2.DEL_YN   = 'N'
+         INNER JOIN PLT_COMMU_GROUP_USER D3 
+            ON D3.GROUP_CD = D2.GROUP_CD
+           AND D3.USR_CD   = #{session.usrCd}
+         WHERE D1.DEL_YN     = 'N'
+           AND D1.FOLDER_GRP = 'GROUP'
+           AND D1.FOLDER_CD  = #{folderCd}
+      </otherwise>
+     </choose>
+    </select>
+
+    <select id="selectCommunityDepts" resultType="com.romy.platform.main.community.dto.CommunityGroupDto$GroupRes">
+        /* selectCommunityDepts : 커뮤니티 소속부서 조회 */
+        <include refid="community.common.sql.withParentChildDept"/>
+             , OTHER_DEPT AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , DEPT_NM
+                    , SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = ( SELECT TOP 1 DEPT_CD
+                                    FROM DEPT_TREE
+                                   ORDER BY LV DESC )
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , D1.SAP_ORG_LEVEL_CD
+                    , CAST(D2.ORD_STR + RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                 FROM PLT_DEPT D1 
+                INNER JOIN OTHER_DEPT D2
+                   ON D2.DEPT_CD = D1.PARENT_DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+             )
+        SELECT DISTINCT DEPT_CD                                    /* 부서코드 */
+             , DEPT_NM                                             /* 부서명 */
+             , 'DEPT'                              AS FOLDER_GRP   /* 폴더그룹코드 */
+             , 1                                   AS ORD_MST      /* 정렬순서1 */
+             , ROW_NUMBER() OVER(ORDER BY LV DESC) AS ORD_DTL      /* 정렬순서2 */
+             , 'true'                              AS ENABLE       /* 활성화여부 */
+          FROM DEPT_TREE
+         UNION ALL
+        SELECT D2.DEPT_CD
+             , D2.DEPT_NM
+             , 'DEPT'
+             , 2
+             , ROW_NUMBER() OVER(ORDER BY D2.SAP_MIS_DEPT_CD, D2.ORD_NUM)
+             , 'true'
+          FROM PLT_USR_CTS D1 
+         INNER JOIN PLT_DEPT D2 
+            ON D2.DEPT_CD = D1.DEPT_CD
+         WHERE D2.DEL_YN = 'N'
+           AND D2.USE_YN = 'Y'
+           AND D1.USR_CD = #{session.usrCd}
+         UNION ALL
+        SELECT DEPT_CD
+             , DEPT_NM
+             , 'DEPT'
+             , 3
+             , ROW_NUMBER() OVER(ORDER BY ORD_STR)
+             , 'false'
+          FROM OTHER_DEPT D1
+         WHERE SAP_ORG_LEVEL_CD <![CDATA[>=]]> '40'
+           AND NOT EXISTS ( SELECT 1
+                              FROM DEPT_TREE
+                             WHERE DEPT_CD = D1.DEPT_CD )
+    </select>
+
+    <select id="selectDeptDocSectorCd" resultType="java.lang.String">
+        /* selectDeptDocSectorCd : 부서 문서함 부문코드 조회 */
+        SELECT SECTOR_CD
+          FROM PLT_FOLDER 
+         WHERE DEL_YN     = 'N'
+           AND FOLDER_GRP = 'DEPT'
+           AND FOLDER_CD  = #{folderCd}
+    </select>
+
+    <select id="selectRootFolderCnt" resultType="java.lang.Integer">
+        /* selectRootFolderCnt : 루트 폴더 개수 조회 */
+        SELECT COUNT(1)
+          FROM PLT_FOLDER 
+         WHERE DEL_YN     = 'N'
+           AND PARENT_CD  = 'ROOT'
+           AND FOLDER_GRP = #{folderGrp}
+           AND SECTOR_CD  = #{sectorCd}
+    </select>
+
+    <insert id="insertRootFolderByCommunity">
+        /* insertRootFolderByCommunity : 루트 폴더 생성 */
+        INSERT INTO PLT_FOLDER
+             (
+               FOLDER_CD       /* 폴더코드 */
+             , FOLDER_NM       /* 폴더명 */
+             , PARENT_CD       /* 부모폴더코드 */
+             , FOLDER_GRP      /* 폴더그룹코드 */
+             , FOLDER_TYPE     /* 폴더타입 */
+             , ORD_NUM         /* 정렬순서 */
+             , SECTOR_CD       /* 부문-사용자코드 */
+        <include refid="common.sql.insertSystemField" />
+             )
+        SELECT #{newFolderCd}
+             , CASE #{folderGrp} WHEN 'MYDOC' THEN '내 폴더'
+                                 WHEN 'DEPT'  THEN (
+                                                     SELECT DEPT_NM
+                                                       FROM PLT_DEPT
+                                                      WHERE DEL_YN  = 'N'
+                                                        AND DEPT_CD = #{sectorCd}
+                                                   )
+                                 WHEN 'GROUP' THEN (
+                                                     SELECT GROUP_NM
+                                                       FROM PLT_COMMU_GROUP
+                                                      WHERE DEL_YN   = 'N'
+                                                        AND GROUP_CD = #{sectorCd}
+                                                   )
+               END
+             , 'ROOT'
+             , #{folderGrp}
+             , 2
+             , 1
+             , #{sectorCd}
+        <include refid="common.sql.insertSystemValue" />
+    </insert>
+
+    <select id="selectCommuFolderAccessAuth" resultType="java.lang.String">
+        /* selectCommuFolderAccessAuth : 폴더 접근권한 체크 */
+        <include refid="community.common.sql.withParentChildDeptNoOrd"/>
+             , FOLDER AS
+             (
+               SELECT D1.FOLDER_CD
+                    , D1.PARENT_CD
+                    , D1.FOLDER_GRP
+                    , D1.SECTOR_CD
+                 FROM PLT_FOLDER D1 
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.FOLDER_CD = #{folderCd}
+                UNION ALL
+               SELECT D2.FOLDER_CD
+                    , D2.PARENT_CD
+                    , D2.FOLDER_GRP
+                    , D2.SECTOR_CD
+                 FROM FOLDER D1
+                INNER JOIN PLT_FOLDER D2 
+                   ON D2.FOLDER_CD = D1.PARENT_CD
+                WHERE D2.DEL_YN = 'N'
+             )
+        SELECT D1.FOLDER_CD
+          FROM FOLDER D1
+         WHERE NOT EXISTS ( <include refid="community.common.sql.selectUsrAuthRole">
+                                <property name="groupColumn" value="D1.FOLDER_GRP"/>
+                            </include> )   /* 권한체크 */
+           AND NOT(     D1.FOLDER_GRP = 'DEPT'
+                    AND EXISTS ( <include refid="community.common.sql.selectUsrDeptAuthRole">
+                                    <property name="deptColumn" value="D1.SECTOR_CD"/>
+                                </include> )
+                  )
+           AND D1.FOLDER_GRP IN ('DEPT', 'GROUP')
+        <include refid="community.common.sql.whereNoPermissionCond">
+            <property name="column" value="D1.FOLDER_CD"/>
+        </include>
+    </select>
+
+</mapper>

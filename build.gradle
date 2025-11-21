@@ -1,0 +1,133 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.8'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.google.cloud.tools.jib' version '3.4.4'
+}
+
+group = 'com.romy'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+//ext {
+//	BUILD_VERSION = new Date().format("yyyyMMddHHmmss")
+//}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.4'
+
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    implementation 'com.google.guava:guava:33.4.8-jre'
+    implementation 'commons-io:commons-io:2.20.0'
+
+    // redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // jwt
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // blob
+    implementation 'com.azure:azure-identity:1.17.0'
+    implementation 'com.azure:azure-storage-blob:12.31.2'
+
+    implementation 'org.apache.commons:commons-compress:1.28.0'
+
+    compileOnly 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'
+
+    // mapstruct
+    implementation 'org.mapstruct:mapstruct:1.5.5.Final'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
+    annotationProcessor 'org.projectlombok:lombok-mapstruct-binding:0.2.0'
+
+    // 동영상 lib
+    implementation 'org.mp4parser:isoparser:1.9.56'
+    implementation 'org.apache.tika:tika-core:3.2.2'
+    implementation 'org.bytedeco:javacv-platform:1.5.12'
+
+    // pdf
+    implementation 'org.apache.pdfbox:pdfbox:3.0.6'
+
+    // swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
+
+    // jackson
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.4'
+
+    // jsoup html 파싱
+    implementation 'org.jsoup:jsoup:1.21.2'
+
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-parameters"
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.withType(ProcessResources).configureEach {
+    filteringCharset = 'UTF-8'
+}
+
+def activeProfile = System.getProperty("spring.profiles.active", "local")
+print("activeProfile = " + activeProfile)
+
+if (activeProfile != "local") {
+    def imageTag = System.getProperty('jib.to.acr.registry.tag')
+    jib {
+        from {
+            image = 'eclipse-temurin:21-jre'
+        }
+        to {
+            image = System.getProperty('jib.to.acr.registry')
+            tags = [imageTag, 'latest']
+            auth {
+                username = System.getProperty('jib.to.auth.username')
+                password = System.getProperty('jib.to.auth.password')
+            }
+        }
+        container {
+            mainClass = 'com.romy.platform.PlatformApplication'
+            environment = [REGISTRY_IMAGE_TAG: imageTag, 'TZ': 'Asia/Seoul']
+            jvmFlags = ['-Dspring.profiles.active=' + activeProfile, '-Duser.language=ko', '-Duser.country=KR', '-Dfile.encoding=UTF-8']
+        }
+    }
+}
+
+
+clean {
+    delete file('src/main/generated')
+    delete file('out')
+}

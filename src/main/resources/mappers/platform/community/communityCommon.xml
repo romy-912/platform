@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="community.common.sql">
+
+    <sql id="withParentChildDept">
+          WITH DEPT_TREE AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , DEPT_NM
+                    , CONCAT(SAP_MIS_DEPT_CD, SAP_ORG_LEVEL_CD)                          AS SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                    , 0 AS LV
+                    , CAST('SELF' AS VARCHAR(10)) AS DIR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = CASE WHEN #{session.deptCd} IS NULL THEN ( SELECT DEPT_CD
+                                                                             FROM PLT_USR 
+                                                                            WHERE USR_CD = #{sectorCd} )
+                                     ELSE #{session.deptCd}
+                                END
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , CONCAT(D1.SAP_MIS_DEPT_CD, D1.SAP_ORG_LEVEL_CD)                                    AS SAP_ORG_LEVEL_CD
+                    , CAST(RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) + D2.ORD_STR AS VARCHAR(1000)) AS ORD_STR
+                    , D2.LV + 1
+                    , CAST('PARENT' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.PARENT_DEPT_CD = D1.DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'PARENT')
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , D1.DEPT_NM
+                    , CONCAT(D1.SAP_MIS_DEPT_CD, D1.SAP_ORG_LEVEL_CD)                                    AS SAP_ORG_LEVEL_CD
+                    , CAST(D2.ORD_STR + RIGHT('0000' + CAST(D1.ORD_NUM AS VARCHAR), 4) AS VARCHAR(1000)) AS ORD_STR
+                    , D2.LV + 1
+                    , CAST('CHILD' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.DEPT_CD = D1.PARENT_DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'CHILD')
+             )
+    </sql>
+
+    <sql id="withParentChildDeptNoOrd">
+          WITH DEPT_TREE AS
+             (
+               SELECT DEPT_CD
+                    , PARENT_DEPT_CD
+                    , CAST('SELF' AS VARCHAR(10)) AS DIR
+                 FROM PLT_DEPT 
+                WHERE DEL_YN  = 'N'
+                  AND USE_YN  = 'Y'
+                  AND DEPT_CD = CASE WHEN #{session.deptCd} IS NULL THEN ( SELECT DEPT_CD
+                                                                             FROM PLT_USR 
+                                                                            WHERE USR_CD = #{sectorCd} )
+                                     ELSE #{session.deptCd}
+                                END
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , CAST('PARENT' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.PARENT_DEPT_CD = D1.DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'PARENT')
+                UNION ALL
+               SELECT D1.DEPT_CD
+                    , D1.PARENT_DEPT_CD
+                    , CAST('CHILD' AS VARCHAR(10))
+                 FROM PLT_DEPT D1 
+                INNER JOIN DEPT_TREE D2
+                   ON D2.DEPT_CD = D1.PARENT_DEPT_CD
+                WHERE D1.DEL_YN = 'N'
+                  AND D1.USE_YN = 'Y'
+                  AND D1.PARENT_DEPT_CD <![CDATA[<>]]> '00000000000000000000'
+                  AND D2.DIR IN ('SELF', 'CHILD')
+             )
+    </sql>
+
+    <sql id="selectUsrAuthRole">
+        SELECT 1
+          FROM PLT_USR_ROLE 
+         WHERE USR_CD   = ISNULL(#{session.usrCd}, #{sectorCd})
+           AND (
+                    ROLE_CD = '00000000000000000000'
+                 OR ( ${groupColumn} <![CDATA[<>]]> 'GROUP' AND ROLE_CD = 'ROLE_PROJECT_TF' )
+               )
+    </sql>
+
+    <sql id="selectUsrDeptAuthRole">
+        SELECT 1
+          FROM PLT_USR_ROLE 
+         WHERE USR_CD        = ISNULL(#{session.usrCd}, #{sectorCd})
+           AND ROLE_CD IN ('00000000000000000002', '00000000000000209753')
+           AND ${deptColumn} IN ( SELECT DEPT_CD FROM DEPT_TREE )
+    </sql>
+
+    <sql id="whereNoPermissionCond">
+           AND (
+                     EXISTS ( SELECT 1
+                                FROM PLT_COMMU_AUTH 
+                               WHERE FOLDER_FILE_CD = ${column} )
+                 AND NOT EXISTS ( SELECT 1
+                                    FROM PLT_COMMU_AUTH 
+                                   WHERE FOLDER_FILE_CD = ${column}
+                                     AND AUTH_DIV      IN ('DEPT', 'USER')
+                                     AND (
+                                              AUTH_CD = ISNULL(#{session.usrCd}, #{sectorCd})
+                                           OR AUTH_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                                           OR AUTH_CD IN ( SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )
+                                         ) )
+                 AND NOT EXISTS ( SELECT 1
+                                    FROM PLT_COMMU_AUTH S2 
+                                   INNER JOIN PLT_MY_GROUP S3 
+                                      ON S3.MG_CD  = S2.AUTH_CD
+                                   INNER JOIN PLT_MY_GROUP_USER S4 
+                                      ON S4.MG_CD  = S3.MG_CD
+                                   WHERE S2.AUTH_DIV       = 'GROUP'
+                                     AND S3.DEL_YN         = 'N'
+                                     AND S4.DEL_YN         = 'N'
+                                     AND S4.USR_CD         = ISNULL(#{session.usrCd}, #{sectorCd})
+                                     AND S2.FOLDER_FILE_CD = ${column} )
+               )
+    </sql>
+
+    <sql id="whereFileNoPermissionCond">
+           /* 파일 편집권한 */
+           AND (
+                    (     ${groupColumn} = 'DEPT'
+                      AND ${deptColumn} NOT IN ( SELECT DEPT_CD FROM DEPT_TREE UNION ALL SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )
+                    )
+                 OR (
+                          EXISTS ( SELECT 1
+                                     FROM PLT_COMMU_AUTH 
+                                    WHERE FOLDER_FILE_CD = ${column} )
+                      AND NOT EXISTS ( SELECT 1
+                                         FROM PLT_COMMU_AUTH 
+                                        WHERE FOLDER_FILE_CD = ${column}
+                                          AND AUTH_DIV      IN ('DEPT', 'USER')
+                                          AND (
+                                                   AUTH_CD = ISNULL(#{session.usrCd}, #{sectorCd})
+                                                OR AUTH_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                                                OR AUTH_CD IN ( SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )
+                                              ) )
+                      AND NOT EXISTS ( SELECT 1
+                                         FROM PLT_COMMU_AUTH S2 
+                                        INNER JOIN PLT_MY_GROUP S3 
+                                           ON S3.MG_CD  = S2.AUTH_CD
+                                        INNER JOIN PLT_MY_GROUP_USER S4 
+                                           ON S4.MG_CD  = S3.MG_CD
+                                        WHERE S2.AUTH_DIV       = 'GROUP'
+                                          AND S3.DEL_YN         = 'N'
+                                          AND S4.DEL_YN         = 'N'
+                                          AND S4.USR_CD         = ISNULL(#{session.usrCd}, #{sectorCd})
+                                          AND S2.FOLDER_FILE_CD = ${column} )
+                    )
+               )
+    </sql>
+
+    <sql id="wherePermissionCond">
+           AND (
+                    NOT EXISTS ( SELECT 1   /* 등록된 권한이 없을 경우 전사 */
+                                   FROM PLT_COMMU_AUTH 
+                                  WHERE FOLDER_FILE_CD = ${column} )
+                 /* 관리자 및 전담팀 권한 */
+                 OR EXISTS ( <include refid="community.common.sql.selectUsrAuthRole"/> )
+                 /* 부서담당자 및 부서장 권한 */
+                 OR (
+                          ${groupColumn} = 'DEPT'
+                      AND EXISTS ( <include refid="community.common.sql.selectUsrDeptAuthRole" /> )
+                    )
+                 /* 그 외 권한 */
+                 OR EXISTS ( SELECT 1
+                               FROM PLT_COMMU_AUTH 
+                              WHERE FOLDER_FILE_CD = ${column}
+                                AND AUTH_DIV      IN ('DEPT', 'USER')
+                                AND (
+                                         AUTH_CD = ISNULL(#{session.usrCd}, #{sectorCd})
+                                      OR AUTH_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                                      OR AUTH_CD IN ( SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )
+                                    ) )
+                 OR EXISTS ( SELECT 1
+                               FROM PLT_COMMU_AUTH S2 
+                              INNER JOIN PLT_MY_GROUP S3 
+                                 ON S3.MG_CD  = S2.AUTH_CD
+                              INNER JOIN PLT_MY_GROUP_USER S4 
+                                 ON S4.MG_CD  = S3.MG_CD
+                              WHERE S2.AUTH_DIV       = 'GROUP'
+                                AND S3.DEL_YN         = 'N'
+                                AND S4.DEL_YN         = 'N'
+                                AND S4.USR_CD         = ISNULL(#{session.usrCd}, #{sectorCd})
+                                AND S2.FOLDER_FILE_CD = ${column} )
+               )
+    </sql>
+
+    <sql id="selectPermissionYn">
+        SELECT CASE WHEN ${groupColumn} = 'DEPT'
+                     AND ${deptColumn} NOT IN ( SELECT DEPT_CD FROM DEPT_TREE
+                                                 UNION ALL
+                                                SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )  THEN 'N'
+                    WHEN ( SELECT COUNT(1)
+                             FROM PLT_COMMU_AUTH 
+                            WHERE FOLDER_FILE_CD = ${column} ) = 0 THEN 'Y'
+                    WHEN ( SELECT COUNT(1)
+                             FROM PLT_COMMU_AUTH 
+                            WHERE FOLDER_FILE_CD = ${column}
+                              AND AUTH_DIV      IN ('DEPT', 'USER')
+                              AND (
+                                       AUTH_CD = ISNULL(#{session.usrCd}, #{sectorCd})
+                                    OR AUTH_CD IN ( SELECT DEPT_CD FROM DEPT_TREE )
+                                    OR AUTH_CD IN ( SELECT DEPT_CD FROM PLT_USR_CTS  WHERE USR_CD = ISNULL(#{session.usrCd}, #{sectorCd}) )
+                                  ) ) <![CDATA[>]]> 0                             THEN 'Y'
+                    WHEN ( SELECT COUNT(1)
+                             FROM PLT_COMMU_AUTH S2 
+                            INNER JOIN PLT_MY_GROUP S3 
+                               ON S3.MG_CD  = S2.AUTH_CD
+                            INNER JOIN PLT_MY_GROUP_USER S4 
+                               ON S4.MG_CD  = S3.MG_CD
+                            WHERE S2.AUTH_DIV       = 'GROUP'
+                              AND S3.DEL_YN         = 'N'
+                              AND S4.DEL_YN         = 'N'
+                              AND S4.USR_CD         = ISNULL(#{session.usrCd}, #{sectorCd})
+                              AND S2.FOLDER_FILE_CD = ${column} ) <![CDATA[>]]> 0 THEN 'Y'
+                    ELSE 'N'
+               END
+    </sql>
+
+
+
+
+
+</mapper>

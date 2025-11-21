@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.auth.mapper.LoginHistoryMapper">
+
+    <select id="selectRecentLoginHistory" resultType="com.romy.platform.main.auth.dvo.LoginHistoryDvo">
+        /* selectRecentLoginHistory : 최근 로그인 이력 조회 */
+        SELECT TOP 1 USR_CD   /* 사용자코드 */
+             , LOGIN_DTT      /* 로그인일시 */
+             , ACCESS_IP      /* 접속IP */
+             , BROWSER_DIV    /* 브라우저구분 */
+             , DIV            /* 로그인구분 */
+          FROM PLT_USR_LOGIN_HISTORY
+         WHERE USR_CD = #{usrCd}
+         ORDER BY LOGIN_DTT DESC
+    </select>
+
+    <insert id="insertLoginHistory" parameterType="com.romy.platform.main.auth.dvo.LoginHistoryDvo">
+        /* insertLoginHistory : 로그인 이력 등록 */
+        INSERT INTO PLT_USR_LOGIN_HISTORY
+             (
+               USR_CD        /* 사용자코드 */
+             , LOGIN_DTT     /* 로그인일시 */
+             , ACCESS_IP     /* 접속IP */
+             , BROWSER_DIV   /* 브라우저구분 */
+             , DIV           /* 로그인구분 */
+             )
+        VALUES
+             (
+               #{usrCd}
+             , #{loginDtt}
+             , #{accessIp}
+             , #{browserDiv}
+             , #{div}
+             )
+    </insert>
+
+
+</mapper>

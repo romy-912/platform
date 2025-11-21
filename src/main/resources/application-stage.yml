@@ -1,0 +1,32 @@
+spring:
+  redis:
+    host: 127.0.0.1
+    port: 6700
+
+# datasource (개발)
+romy:
+  datasource:
+    platform:
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      url: jdbc:sqlserver://127.0.0.1:1433;databaseName=platform;encrypt=false;sendStringParametersAsUnicode=false
+      username: platform_app
+      password: plat!@34
+
+    sub:
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      url: jdbc:sqlserver://127.0.0.1:1433;databaseName=sub;encrypt=false;sendStringParametersAsUnicode=false
+      username: platform_app
+      password: plat!@34
+
+springdoc:
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+  swagger-ui:
+    disable-swagger-default-url: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    default-models-expand-depth: -1
+    enabled: true
+  cache:
+    disabled: true
+  override-with-generic-response: false

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.romy.platform.main.common.mapper.CodeMapper">
+
+    <select id="selectCommonCode" resultType="com.romy.platform.main.common.dvo.CodeDvo">
+        /* selectCommonCode : 공통코드 조회 */
+        SELECT CD                    /* 코드 */
+             , PARENT_CD             /* 부모코드 */
+             , CD_NM                 /* 코드명 */
+             , CD_CONT               /* 코드내용 */
+             , ORD_NUM               /* 정렬순서 */
+             , OUT_CD_YN             /* 외부코드여부 */
+             , REF_CD                /* 참조코드 */
+             , SYS_CD_YN             /* 시스템코드여부 */
+             , USE_YN                /* 사용여부 */
+             , SAP_CD_DIV            /* SAP연동구분 */
+             , SAP_CD                /* SAP코드 */
+             , SAP_MIS_CD            /* SAP연동 MIS 관련코드 */
+             , SAP_MIS_NM            /* SAP연동 MIS 관련코드명 */
+             , DESIGN_SECTOR_CD_YN   /* 설계용 부문여부 */
+             , CD_CONT2              /* 코드내용2 */
+             , TEMP_GRP              /* 그룹 */
+             , TEMP_LV               /* 레벨 */
+          FROM PLT_CD
+         WHERE DEL_YN    = 'N'
+           AND USE_YN    = 'Y'
+           AND PARENT_CD = #{parentCd}
+         ORDER BY ORD_NUM
+    </select>
+
+</mapper>
