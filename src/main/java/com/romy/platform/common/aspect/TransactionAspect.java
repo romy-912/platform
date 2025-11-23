@@ -34,7 +34,7 @@ public class TransactionAspect {
     }
 
     @Around("@annotation(platformTransactional)")
-    public Object handleDidasTransaction(ProceedingJoinPoint joinPoint, PlatformTransactional platformTransactional) throws Throwable {
+    public Object handlePlatformTransaction(ProceedingJoinPoint joinPoint, PlatformTransactional platformTransactional) throws Throwable {
         DefaultTransactionDefinition def = new DefaultTransactionDefinition();
         def.setPropagationBehavior(platformTransactional.propagation().value());
         def.setTimeout(platformTransactional.timeout());
@@ -52,7 +52,7 @@ public class TransactionAspect {
     }
 
     @Around("@annotation(subTransactional)")
-    public Object handleImsTransaction(ProceedingJoinPoint joinPoint, SubTransactional subTransactional) throws Throwable {
+    public Object handleSubTransaction(ProceedingJoinPoint joinPoint, SubTransactional subTransactional) throws Throwable {
         DefaultTransactionDefinition def = new DefaultTransactionDefinition();
         def.setPropagationBehavior(subTransactional.propagation().value());
         def.setTimeout(subTransactional.timeout());

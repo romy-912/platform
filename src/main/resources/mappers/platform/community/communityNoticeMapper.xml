@@ -451,7 +451,7 @@
             ON D2.USR_CD = D1.USR_CD
           LEFT OUTER JOIN PLT_DEPT D3 
             ON D3.DEPT_CD = D2.DEPT_CD
-          LEFT OUTER JOIN DIDAS_SAP.dbo.TBL_SAP_ORG_INFO D4
+          LEFT OUTER JOIN SAP.dbo.TBL_SAP_ORG_INFO D4
             ON D4.ORG_ID    = D3.SAP_DEPT_CD
            AND D4.ORGNZT_ST = 'P'
          WHERE D1.BRD_CD = #{brdCd}
