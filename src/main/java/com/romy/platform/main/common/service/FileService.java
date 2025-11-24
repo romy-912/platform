@@ -146,7 +146,7 @@ public class FileService {
                 try (InputStream in = file.getInputStream();
                      OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[16384];
                     int bytesRead;
                     while ((bytesRead = in.read(buffer)) != -1) {
                         out.write(buffer, 0, bytesRead);
@@ -240,7 +240,7 @@ public class FileService {
             try (InputStream in = file.getInputStream();
                  OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
 
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[16384];
                 int bytesRead;
                 while ((bytesRead = in.read(buffer)) != -1) {
                     out.write(buffer, 0, bytesRead);
@@ -367,7 +367,7 @@ public class FileService {
             try (InputStream in = Files.newInputStream(target);
                  OutputStream out = response.getOutputStream()) {
 
-                byte[] buffer = new byte[8192]; // 8KB
+                byte[] buffer = new byte[16384];
                 int bytesRead;
                 while ((bytesRead = in.read(buffer)) != -1) {
                     out.write(buffer, 0, bytesRead);
@@ -617,7 +617,7 @@ public class FileService {
                 if (entry.getName().toLowerCase().startsWith("docprops/thumbnail")) {
 
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[16384];
                     int read;
                     while ((read = zis.read(buffer)) != -1) {
                         baos.write(buffer, 0, read);
