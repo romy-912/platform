@@ -111,7 +111,7 @@ public class CooperationNoticeService {
                          OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE
                                  , StandardOpenOption.TRUNCATE_EXISTING)) {
 
-                        byte[] buffer = new byte[8192];
+                        byte[] buffer = new byte[16384];
                         int bytesRead;
                         while ((bytesRead = in.read(buffer)) != -1) {
                             out.write(buffer, 0, bytesRead);
