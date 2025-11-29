@@ -121,7 +121,7 @@ if (activeProfile != "local") {
         container {
             mainClass = 'com.romy.platform.PlatformApplication'
             environment = [REGISTRY_IMAGE_TAG: imageTag, 'TZ': 'Asia/Seoul']
-            jvmFlags = ['-Dspring.profiles.active=' + activeProfile, '-Duser.language=ko', '-Duser.country=KR', '-Dfile.encoding=UTF-8']
+            jvmFlags = ['-Dspring.profiles.active=' + activeProfile, '-Duser.language=ko', '-Duser.country=KR', '-Dfile.encoding=UTF-8', '-Xms4g', '-Xmx6g']
         }
     }
 }
