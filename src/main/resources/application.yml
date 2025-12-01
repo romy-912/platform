@@ -4,6 +4,10 @@ server:
     context-path: /api
   tomcat:
     reponse-buffer-size: 16384
+    threads:
+      max: 150
+      min-spare: 20
+      accept-count: 100
 
 domain: "http://127.0.0.1:3000/app"
 
@@ -30,19 +34,23 @@ romy:
       connection-timeout: 10000
       validation-timeout: 5000
       idle-timeout: 600000
-      minimum-idle: 25
+      minimum-idle: 40
       max-lifetime: 1500000
-      maximum-pool-size: 50
+      maximum-pool-size: 100
       auto-commit: false
 
 management:
   endpoints:
     web:
       exposure:
-        include: "health"
+        include: "health,metrics"
   endpoint:
     health:
       show-details: never
+  metrics:
+    enable:
+      all: false
+      hikaricp: true
 
 # file dir
 file:
